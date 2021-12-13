@@ -1,0 +1,95 @@
+clear
+set verbose off
+open mrw.gdt
+
+function matrix cflip (const matrix m)
+/* Reverse the order of elements in a matrix along the column axis.
+    The shape of the matrix is preserved, but the columns are reordered.*/
+
+    ncols = cols(m)
+    matrix r = mshape(NA, ncols, rows(m))
+
+    loop i=1..ncols
+        r[,i] = m[,end-i+1]
+    endloop
+
+    return r
+end function
+
+function matrix rflip (matrix m)
+/* Reverse the order of elements in a matrix along the rows axis.
+    The shape of the matrix is preserved, but the rows are reordered.*/
+    return transp(cflip(transp(m)))
+end function
+
+
+list X = gdp60 gdp85 inv school
+smpl X --no-missing
+
+# native
+#pca X --save-all
+
+/*
+   # by hand
+   list SX = stdize(X)
+   matrix Z = {SX}
+   matrix eigenvectors = {}
+   lambda = eigensym(Z'Z, &eigenvectors)
+   eigenvectors = cflip(eigenvectors)
+
+   series fac1 = Z * eigenvectors[,1]
+   series fac2 = Z * eigenvectors[,2]
+*/
+
+
+function void pca_biplot (const list X "Features") #, const list PC "Some PCs")
+
+    pca X --save-all
+    list PC = PC*
+
+    nX = nelem(X)
+    list SX = stdize(X)
+    matrix Z = {SX}
+    strings vnames = varnames(X)
+
+    matrix eigenvectors = {}
+    lambda = eigensym(Z'Z, &eigenvectors)
+    eigenvectors = cflip(eigenvectors)
+
+    strings fnames = array(0)
+
+    loop foreach i X     # y-axis
+        loop foreach j X # x-axis
+            if "X.$i" != "X.$j" && j < i
+                series fac1 = Z * eigenvectors[,i]
+                series fac2 = Z * eigenvectors[,j]
+                list L = fac2 fac1
+
+                # construct the arrow coordinates
+                string arrow = ""
+                string label = ""
+                scalar shift = 0#.1
+                loop l=1..nX
+                    arrow += sprintf("set arrow to %g,%g lt 1 lw 1 lc rgb 'red'\n", eigenvectors[l, i], eigenvectors[l, j])
+                    label += sprintf("set label '%s' at %g,%g tc rgb 'red'\n", \
+                      vnames[l], (shift + eigenvectors[l, i]), (shift + eigenvectors[l, j]))
+                endloop
+
+                plot L
+                    options fit=none
+                    #literal set linetype 3 lc rgb "#0000ff"
+                    literal set nokey
+                    #printf "set title \"%s\"", title
+                    printf "set xlabel \"Principal component %d\"", i
+                    printf "set ylabel \"Principal component %d\"", j
+                    #printf "set arrow to %g,%g", eigenvectors[i, i], eigenvectors[i, j]
+                    literal @arrow
+                    literal @label
+                end plot --output=display
+            endif
+        endloop
+    endloop
+end function
+
+#list PC = PC*
+pca_biplot(X) #, PC)
