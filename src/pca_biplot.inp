@@ -1,62 +1,43 @@
 clear
 set verbose off
 open mrw.gdt
-
-function matrix cflip (const matrix m)
-/* Reverse the order of elements in a matrix along the column axis.
-    The shape of the matrix is preserved, but the columns are reordered.*/
-
-    ncols = cols(m)
-    matrix r = mshape(NA, ncols, rows(m))
-
-    loop i=1..ncols
-        r[,i] = m[,end-i+1]
-    endloop
-
-    return r
-end function
-
-function matrix rflip (matrix m)
-/* Reverse the order of elements in a matrix along the rows axis.
-    The shape of the matrix is preserved, but the rows are reordered.*/
-    return transp(cflip(transp(m)))
-end function
+include logging.gfn
+include multiplot.gfn
 
 
-list X = gdp60 gdp85 inv school
+list X = gdp60 gdp85 inv
 smpl X --no-missing
 
-# native
-#pca X --save-all
 
-/*
-   # by hand
-   list SX = stdize(X)
-   matrix Z = {SX}
-   matrix eigenvectors = {}
-   lambda = eigensym(Z'Z, &eigenvectors)
-   eigenvectors = cflip(eigenvectors)
+function void pca_biplot (const list X "Features",
+                          const string filename[null] "Optional: path of figure to save",
+                          const bool use_vcv[FALSE] "Optional: Use VCV instead of correlation")
+    /* Compute PCA and plot the biplot for all combinations among X. */
 
-   series fac1 = Z * eigenvectors[,1]
-   series fac2 = Z * eigenvectors[,2]
-*/
+    string type = (use_vcv == TRUE) ? "--covariance" : ""
+    scalar T = $nobs
+    scalar nX = nelem(X)
+    matrix Z = {stdize(X)}
+    strings vnames = varnames(X)
+    matrix eigenvectors = {}
+    strings filenames = array(0)
 
+    smpl X --no-missing
+    if $nobs < T
+        Warn("Removed observations with missing values.")
+    endif
 
-function void pca_biplot (const list X "Features") #, const list PC "Some PCs")
+    if use_vcv
+        Info("Compute PCA using the variance-covariance among features.")
+    else
+        Info("Compute PCA using correlation among features.")
+    endif
+    pca X --save-all --quiet @type
 
-    pca X --save-all
     list PC = PC*
 
-    nX = nelem(X)
-    list SX = stdize(X)
-    matrix Z = {SX}
-    strings vnames = varnames(X)
-
-    matrix eigenvectors = {}
-    lambda = eigensym(Z'Z, &eigenvectors)
-    eigenvectors = cflip(eigenvectors)
-
-    strings fnames = array(0)
+    eigensym(Z'Z, &eigenvectors)
+    eigenvectors = mreverse(eigenvectors, TRUE)
 
     loop foreach i X     # y-axis
         loop foreach j X # x-axis
@@ -75,21 +56,21 @@ function void pca_biplot (const list X "Features") #, const list PC "Some PCs")
                       vnames[l], (shift + eigenvectors[l, i]), (shift + eigenvectors[l, j]))
                 endloop
 
+                fname = sprintf("%s/pcaplot_%d.gp", $dotdir, randint(0, 10e6))
                 plot L
                     options fit=none
-                    #literal set linetype 3 lc rgb "#0000ff"
                     literal set nokey
-                    #printf "set title \"%s\"", title
                     printf "set xlabel \"Principal component %d\"", i
                     printf "set ylabel \"Principal component %d\"", j
-                    #printf "set arrow to %g,%g", eigenvectors[i, i], eigenvectors[i, j]
                     literal @arrow
                     literal @label
-                end plot --output=display
+                end plot --output="@fname"
+                filenames += fname
             endif
         endloop
     endloop
+
+    multiplot(filenames, "foo.png")
 end function
 
-#list PC = PC*
-pca_biplot(X) #, PC)
+pca_biplot(X)
