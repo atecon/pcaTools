@@ -1,2 +1,2 @@
-# pca_biplot
-Biplot for PCA 
+# Biplot for PCA
+Prototype for creating biplots based on PCA.
