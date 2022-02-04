@@ -1,11 +1,19 @@
 clear
 set verbose off
-open mrw.gdt
+
 include logging.gfn
 include multiplot.gfn
 
+EXAMPLE = 2
 
-list X = gdp60 gdp85 inv
+if EXAMPLE == 1
+    open mrw.gdt --quiet
+    list X = gdp60 gdp85 inv
+elif EXAMPLE == 2
+    open griliches.gdt --quiet
+    list X = med iq age s #expr lw
+endif
+
 smpl X --no-missing
 
 
