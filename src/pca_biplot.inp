@@ -4,7 +4,7 @@ set verbose off
 include logging.gfn
 include multiplot.gfn
 
-EXAMPLE = 2
+EXAMPLE = 1
 
 if EXAMPLE == 1
     open mrw.gdt --quiet
@@ -57,7 +57,7 @@ function void pca_biplot (const list X "Features",
                 # construct the arrow coordinates
                 string arrow = ""
                 string label = ""
-                scalar shift = 0#.1
+                scalar shift = 0.1
                 loop l=1..nX
                     arrow += sprintf("set arrow to %g,%g lt 1 lw 1 lc rgb 'red'\n", eigenvectors[l, i], eigenvectors[l, j])
                     label += sprintf("set label '%s' at %g,%g tc rgb 'red'\n", \
@@ -68,6 +68,7 @@ function void pca_biplot (const list X "Features",
                 plot L
                     options fit=none
                     literal set nokey
+                    literal set linetype 1 lc rgb "#2080bfff" ps 1.0
                     printf "set xlabel \"Principal component %d\"", i
                     printf "set ylabel \"Principal component %d\"", j
                     literal @arrow
