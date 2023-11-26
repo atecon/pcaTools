@@ -26,9 +26,7 @@ smpl obs < 25 --restrict
 
 
 bundle P = pcaTools(X)
-pcaPrint(P)
-stop
 print P
+pcaPrint(P)
 pcaScreePlot(P)
 pcaBiplot(P)
-#printPCA(P)
