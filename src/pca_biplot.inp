@@ -1,5 +1,4 @@
 include logging.gfn
-include multiplot.gfn
 
 function bundle setDefault (const list X)
     /**
@@ -104,19 +103,21 @@ function void doSvdAndStoreResult (bundle *self)
     # of the VCV matrix
     # Matrix 'D' is a row vector -of the (positive) singular values in
     # descending order;
+    # D_i equals the i-th eigenvalue * ($nobs-1)
     matrix self.D = svd(self.ZZ, &U, &V)
 
-    matrix self.V = V'  # Columns refer to the m-th principal component
+    matrix self.V = V'  # make sure columns refer to the m-th component
     rnameset(self.V, self.vnames)
+    cnameset(self.V, createCnamesComponents(self.nX))
+
     matrix self.U = U   # these are the loadings (aka standard coordinates)
-    matrix self.UD = self.U .* self.D  # scores (aka principal coordinates)
+    matrix self.UD = self.U .* self.D  # principal coordinates
 end function
 
 
-function matrix varianceExplained (const matrix D)
-    /* Compute variance explained in percent. Matrix 'D' refers to the vector
-    of singular values. */
-    matrix v = (D.^2) ./ sum(D.^2) .* 100
+function matrix varianceExplained (const matrix eigenvalues)
+    /* Compute variance explained in percent. */
+    matrix v = eigenvalues ./ sum(eigenvalues) .* 100
     cnameset(v, createCnamesComponents(nelem(v)))
 
     return v
@@ -150,6 +151,19 @@ function matrix computePCAScores (const matrix Z, const matrix U)
 end function
 
 
+function matrix computeEigenvalues (const bundle self)
+    /*
+    * Compute the eigenvalues of the data matrix in the context of PCA.
+    *
+    * @param self - The bundle containing the diagonal matrix D of singular values and the number of observations N.
+    * @return The matrix of eigenvalues.
+    */
+
+    matrix lambdas = self.D / (self.N - 1)
+    return lambdas
+end function
+
+
 
 function bundle pcaTools (const list X "Features",
                           bundle opts[null])
@@ -177,11 +191,12 @@ function bundle pcaTools (const list X "Features",
     matrix self.Z = getStdizedMatrix(X, self)
     matrix self.ZZ = self.Z'self.Z
     doSvdAndStoreResult(&self)
-    matrix self.variance_explained = varianceExplained(self.D)
+    matrix self.eigenvalues = computeEigenvalues(self)
+    matrix self.variance_explained = varianceExplained(self.eigenvalues)
     matrix self.scores = computePCAScores(self.Z, self.U)
 
     # TODO; only for debugging
-    pca stdize(X) #--save-all
+    pca stdize(X) --covariance #--save-all
     #list PC = PC*
     #print PC -o
     #print self.scores
@@ -196,6 +211,46 @@ function bundle pcaTools (const list X "Features",
     */
 
     return self
+end function
+
+
+function void pcaPrint (const bundle self)
+    /* Print results */
+
+    printTitle(self)
+    printPVE(self)
+    printLoadings(self)
+end function
+
+
+function void printLoadings (const bundle self)
+    printf "\nComponent loadings\n\n"
+    printf "%16.3f\n", self.V
+end function
+
+
+function void printPVE (const bundle self)
+
+    matrix M = self.eigenvalues'
+    M ~= self.D'
+    M ~= self.variance_explained'
+    M ~= cum(self.variance_explained')
+
+    rnameset(M, createCnamesComponents(self.nX))
+    strings clabels = defarray("Eigenvalue", "Singular Values", "Proportion", "Cumulative")
+    cnameset(M, clabels)
+
+    printf "%16.3f\n", M
+end function
+
+
+function void printTitle (const bundle self)
+    if self.use_vcv == TRUE
+        string type = "Covariance"
+    else
+        string type = "Correlation"
+    endif
+    printf "\n\nPrincipal Component Analysis of %s Matrix\n\n", type
 end function
 
 
