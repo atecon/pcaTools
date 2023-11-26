@@ -1,0 +1,32 @@
+#clear
+set verbose off
+
+include logging.gfn
+include multiplot.gfn
+include pca_biplot.inp
+
+set workdir "/home/artur/git/pca_biplot/src"
+
+EXAMPLE = 1
+
+if EXAMPLE == 1
+    open mrw.gdt --quiet
+    list X = gdp60 gdp85 inv
+elif EXAMPLE == 2
+    open griliches.gdt --quiet
+    list X = med iq age s #expr lw
+elif EXAMPLE == 3
+    #open griliches.gdt --quiet
+    open "/home/artur/Universität/Kurse_Eigene/THB/oekonometrie_kurse/common/code/ISL/Credit.csv" -q
+    list X = Income Rating Cards #Age #Education Region
+endif
+
+smpl X --no-missing
+smpl obs < 25 --restrict
+
+
+bundle P = pcaTools(X)
+print P
+pcaScreePlot(P)
+pcaBiplot(P)
+#printPCA(P)

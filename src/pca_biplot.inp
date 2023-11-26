@@ -1,85 +1,339 @@
-clear
-set verbose off
-
 include logging.gfn
 include multiplot.gfn
 
-EXAMPLE = 1
+function bundle setDefault (const list X)
+    /**
+    * Creates a bundle object with default values.
+    *
+    * @param list X - The list of values.
+    * @return bundle - The bundle object with default values.
+    */
 
-if EXAMPLE == 1
-    open mrw.gdt --quiet
-    list X = gdp60 gdp85 inv
-elif EXAMPLE == 2
-    open griliches.gdt --quiet
-    list X = med iq age s #expr lw
-endif
+    bundle self
 
-smpl X --no-missing
+    scalar self.use_vcv = TRUE
+    scalar self.N = $nobs
+    scalar self.nX = nelem(X)
+    scalar self.do_stdize = TRUE
+    matrix self.eigenvectors = {}
+    strings self.filenames = array(0)
+    scalar self.verbose = FALSE
+    # For biplot
+    string self.filename = "display"
+    scalar self.offset_label = 0.1
+    scalar self.pointtype = 4
+    scalar self.pointsize = 1.0
+    scalar self.transparency = 60
+    scalar self.height = 800
+    scalar self.width = 800
+    scalar self.font_yxlabels = 10
+
+    return self
+end function
 
 
-function void pca_biplot (const list X "Features",
-                          const string filename[null] "Optional: path of figure to save",
-                          const bool use_vcv[FALSE] "Optional: Use VCV instead of correlation")
-    /* Compute PCA and plot the biplot for all combinations among X. */
+function void getTypeXX (bundle *self)
+    /**
+    * This function sets the value of `self.opt_type_xx` based on the value of `self.use_vcv`.
+    * If `self.use_vcv` is TRUE, the value of `self.opt_type_xx` is set to "--covariance".
+    * Otherwise, the default value of `self.opt_type_xx` is an empty string.
+    *
+    * @param self - The bundle object.
+    */
 
-    string type = (use_vcv == TRUE) ? "--covariance" : ""
-    scalar T = $nobs
-    scalar nX = nelem(X)
-    matrix Z = {stdize(X)}
-    strings vnames = varnames(X)
-    matrix eigenvectors = {}
-    strings filenames = array(0)
+    string self.opt_type_xx = ""      # default: correlation matrix is used
 
-    smpl X --no-missing
-    if $nobs < T
+    if self.use_vcv == TRUE
+        string self.opt_type_xx = "--covariance"
+    endif
+end function
+
+
+function void printTypeXX (const bundle self)
+    if self.verbose
+        if self.use_vcv == TRUE
+            Info("Compute PCA using the variance-covariance among features.")
+        else
+            Info("Compute PCA using correlation among features.")
+        endif
+    endif
+end function
+
+
+function void updateT (bundle *self)
+    scalar self.N = $nobs
+    if self.verbose
         Warn("Removed observations with missing values.")
     endif
+end function
 
-    if use_vcv
-        Info("Compute PCA using the variance-covariance among features.")
-    else
-        Info("Compute PCA using correlation among features.")
+
+function matrix getStdizedMatrix (const list X, const bundle self)
+    /**
+    * Standardize the input matrix X to have zero mean and unit standard deviation if selected, otherwise leave it unchanged.
+    *
+    * @param X - The input list to be standardized.
+    * @param self - The bundle containing the configuration options.
+    * @return The standardized matrix.
+    */
+
+    if nelem(X) == 0
+        Warn("Input list is empty. Returning an empty matrix.")
+        return {}
     endif
-    pca X --save-all --quiet @type
 
-    list PC = PC*
+    matrix Z
 
-    eigensym(Z'Z, &eigenvectors)
+    if self.do_stdize
+        matrix Z = {stdize(X)}
+    else
+        matrix Z = {X}
+    endif
+
+    return Z
+end function
+
+
+function void doSvdAndStoreResult (bundle *self)
+    /* code description
+    return: type, description */
+
+    matrix D, U, V
+
+    # Singular values are proportional to the square roots of the eigenvalues
+    # of the VCV matrix
+    # Matrix 'D' is a row vector -of the (positive) singular values in
+    # descending order;
+    matrix self.D = svd(self.ZZ, &U, &V)
+
+    matrix self.V = V'  # Columns refer to the m-th principal component
+    rnameset(self.V, self.vnames)
+    matrix self.U = U   # these are the loadings (aka standard coordinates)
+    matrix self.UD = self.U .* self.D  # scores (aka principal coordinates)
+end function
+
+
+function matrix varianceExplained (const matrix D)
+    /* Compute variance explained in percent. Matrix 'D' refers to the vector
+    of singular values. */
+    matrix v = (D.^2) ./ sum(D.^2) .* 100
+    cnameset(v, createCnamesComponents(nelem(v)))
+
+    return v
+end function
+
+
+function strings createCnamesComponents (const int nX[1::])
+    strings clabels = array(nX)
+    loop i=1..nX
+        clabels[i] = sprintf("PC %d", $i)
+    endloop
+
+    return clabels
+end function
+
+
+function matrix computePCAScores (const matrix Z, const matrix U)
+    /*
+    * Compute the scores of the Principal Component Analysis (PCA).
+    * The scores are the representation of the data in the principal component space.
+    * They are computed by multiplying the (standardized) data matrix Z by the matrix U of left singular vectors from the SVD of Z.
+    *
+    * @param Z - The standardized data matrix.
+    * @param U - The matrix of left singular vectors from the SVD of Z.
+    * @return The matrix of PCA scores.
+    */
+
+    matrix scores = Z * U
+
+    return scores
+end function
+
+
+
+function bundle pcaTools (const list X "Features",
+                          bundle opts[null])
+
+    /*
+        const string filename[null] "Optional: path of figure to save",
+        const bool use_vcv[FALSE] "Optional: Use VCV instead of correlation")
+    */
+
+    /* Compute PCA and plot the biplot for all combinations among X. */
+
+    bundle self = setDefault(X)
+    if exists(opts)
+        bundle self = self + opts
+    endif
+    strings self.vnames = varnames(X)
+    getTypeXX(&self)
+    printTypeXX(self)
+
+    #string opt_quiet = self.verbose == TRUE ? "" : "--quiet"
+    #string opt_type_xx = self.use_vcv == TRUE ? "--covariance" : ""
+
+    smpl X --no-missing
+    updateT(&self)
+    matrix self.Z = getStdizedMatrix(X, self)
+    matrix self.ZZ = self.Z'self.Z
+    doSvdAndStoreResult(&self)
+    matrix self.variance_explained = varianceExplained(self.D)
+    matrix self.scores = computePCAScores(self.Z, self.U)
+
+    # TODO; only for debugging
+    pca stdize(X) #--save-all
+    #list PC = PC*
+    #print PC -o
+    #print self.scores
+
+    /* EVD
+    matrix eigenvectors
+    eigensym(self.ZZ, &eigenvectors)
     eigenvectors = mreverse(eigenvectors, TRUE)
+    print mreverse(self.U)
+    print eigenvectors
+    stop
+    */
 
-    loop foreach i X     # y-axis
-        loop foreach j X # x-axis
-            if "X.$i" != "X.$j" && j < i
-                series fac1 = Z * eigenvectors[,i]
-                series fac2 = Z * eigenvectors[,j]
-                list L = fac2 fac1
+    return self
+end function
 
-                # construct the arrow coordinates
-                string arrow = ""
-                string label = ""
-                scalar shift = 0.1
-                loop l=1..nX
-                    arrow += sprintf("set arrow to %g,%g lt 1 lw 1 lc rgb 'red'\n", eigenvectors[l, i], eigenvectors[l, j])
-                    label += sprintf("set label '%s' at %g,%g tc rgb 'red'\n", \
-                      vnames[l], (shift + eigenvectors[l, i]), (shift + eigenvectors[l, j]))
-                endloop
 
-                fname = sprintf("%s/pcaplot_%d.gp", $dotdir, randint(0, 10e6))
-                plot L
+function string createArrowString (const bundle self,
+                                   const int pc1[1::],
+                                   const int pc2[1::])
+    /*
+    * Create a string that represents a set of arrows for a biplot.
+    * The arrows are determined by the loadings of the variables on the principal components.
+    *
+    * @param self - The bundle containing the loadings matrix V and the number of variables nX.
+    * @param pc1 - The index of the first principal component.
+    * @param pc2 - The index of the second principal component.
+    * @return The string that represents the set of arrows.
+    */
+
+    string arrow = ""
+
+    loop l=1..self.nX
+
+        #set arrow 1 from <x1>, second <y1> to <x2>, second <y2>
+
+
+        arrow += sprintf("set arrow to %g,%g lt 1 lw 1 lc rgb 'red'\n",
+                         self.V[l,pc1],
+                         self.V[l,pc2])
+    endloop
+
+    return arrow
+end function
+
+
+function string createLabelString (const bundle self,
+                                   const int pc1[1::],
+                                   const int pc2[1::])
+    /*
+    * Create a string that represents a set of labels for a biplot.
+    *
+    * @param self - The bundle containing the loadings matrix V and the number of variables nX.
+    * @param pc1 - The index of the first principal component.
+    * @param pc2 - The index of the second principal component.
+    * @return The string that represents the set of arrows.
+    */
+    string label = ""
+
+    loop l=1..self.nX
+        label += sprintf("set label '%s' at %g,%g tc rgb 'red'\n",
+                         self.vnames[l],
+                         (self.offset_label + self.V[l,pc1]),
+                         (self.offset_label + self.V[l,pc2]) )
+    endloop
+
+    return label
+end function
+
+
+function scalar calculateValueRange (const matrix scores)
+    /*
+    * Calculate the range of values in the scores matrix.
+    * It finds the absolute minimum and maximum values in the scores, takes the maximum of these two values, and then multiplies it by 1.025 to provide a little extra space.
+    *
+    * @param scores - Matrix of scores for all
+    * @return The calculated value range.
+    */
+
+    scalar value = xmax(abs(min(scores)),
+                        max(scores)) * 1.025
+
+    return value
+end function
+
+
+function void pcaBiplot (const bundle self, const string filename[null])
+    /* Create biplot */
+
+    string fname = exists(filename) ? filename : "display"
+    strings BiPlots = array(self.nX * (self.nX - 1)/2)
+    scalar count = 1
+
+    loop i=1..self.nX       # x-axis
+        loop j=1..self.nX   # y-axis
+            if i != j && i < j
+                string arrows = createArrowString(self, i, j)
+                string label = createLabelString(self, i, j)
+                matrix mplot = self.scores[,{j,i}]
+
+                scalar xrange = calculateValueRange(self.scores[,i])
+                scalar yrange = calculateValueRange(self.scores[,j])
+
+                plot mplot
                     options fit=none
                     literal set nokey
-                    literal set linetype 1 lc rgb "#2080bfff" ps 1.0
-                    printf "set xlabel \"Principal component %d\"", i
-                    printf "set ylabel \"Principal component %d\"", j
-                    literal @arrow
+                    literal set grid
+                    # TODO: Transparency required '"'-Anfühungstzeichen -- BUT HOW TO ESCAPE?
+                    printf "set linetype 1 lc rgb '#%d0066ff' pt %d ps %g",
+                      self.transparency, self.pointtype, self.pointsize
+                    printf "set xlabel 'PC %d (%.1f pct.)' font ',%d'",
+                        i, self.variance_explained[i], self.font_yxlabels
+                    printf "set ylabel 'PC %d (%.1f pct.)' font ',%d'",
+                        j, self.variance_explained[j], self.font_yxlabels
+                    literal set xzeroaxis
+                    literal set yzeroaxis
+                    printf "set xrange[%g:%g]", -xrange, xrange
+                    printf "set yrange[%g:%g]", -yrange, yrange
+                    printf "set xtics font ',%d'", self.font_yxlabels
+                    printf "set ytics font ',%d'", self.font_yxlabels
+                    literal @arrows
                     literal @label
-                end plot --output="@fname"
-                filenames += fname
+                end plot --outbuf=BiPlots[count]
+                count++
             endif
         endloop
     endloop
 
-    multiplot(filenames, "foo.png")
+
+    gridplot BiPlots --width=self.width --height=self.height --output="@fname"
 end function
 
-pca_biplot(X)
+
+
+function void pcaScreePlot (const bundle self, const string filename[null])
+    /* Create screeplot */
+
+    string fname = exists(filename) ? filename : "display"
+    matrix mplot = self.variance_explained'
+    scalar max_value = max(self.variance_explained') * 1.025
+    max_value = xmin(max_value, 100)
+
+    plot mplot
+        options with-lines time-series
+        printf "set ylabel 'Percentage of variance' font ',%d'",
+          self.font_yxlabels
+        printf "set xlabel 'Principal components' \
+                font ',%d'", self.font_yxlabels
+        printf "set xtics font ',%d'", self.font_yxlabels
+        printf "set ytics font ',%d'", self.font_yxlabels
+        literal set linetype 1 lw 3
+        literal set grid
+        printf "set yrange[0:%g]", max_value
+    end plot --output="@fname"
+end function
