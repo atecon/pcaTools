@@ -17,7 +17,9 @@ function bundle setDefault (const list X)
     matrix self.eigenvectors = {}
     strings self.filenames = array(0)
     scalar self.verbose = FALSE
-    # For biplot
+
+    # Tweaks for biplot
+    scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
     string self.filename = "display"
     scalar self.offset_label = 0.1
     scalar self.pointtype = 4
@@ -25,9 +27,10 @@ function bundle setDefault (const list X)
     scalar self.transparency = 90
     scalar self.height_biplot = 800
     scalar self.width_biplot = 800
-    scalar self.rows_biplot = NA
-    scalar self.cols_biplot = NA
+    scalar self.rows_biplot = NA  # NA: set automatically
+    scalar self.cols_biplot = NA  # NA: set automatically
     scalar self.fontsize = 10
+    scalar self.centre_biplot = FALSE # if TRUE, zeros are centred on both axis
 
     return self
 end function
@@ -329,9 +332,13 @@ function void pcaBiplot (const bundle self, const string filename[null])
     /* Create biplot */
 
     string fname = exists(filename) ? filename : "display"
-    strings BiPlots = array(self.nX * (self.nX - 1)/2)
+    scalar n_pcs_to_plot = ok(self.n_pcs_to_plot) ? self.n_pcs_to_plot : self.nX
+    strings BiPlots = array(n_pcs_to_plot * (n_pcs_to_plot - 1)/2)
     scalar count = 1
     scalar add_factor = FALSE
+    scalar xrange = NA
+    scalar yrange = NA
+    string opt_key = "set key"
 
     if inbundle(self, "factor")
         if typename(self.factor) == "series"
@@ -347,20 +354,31 @@ function void pcaBiplot (const bundle self, const string filename[null])
 
     string opt_dummy = getFactorPlotOption(add_factor)
 
-    loop i=1..self.nX       # x-axis
-        loop j=1..self.nX   # y-axis
+
+    loop i=1..n_pcs_to_plot       # x-axis
+        loop j=1..n_pcs_to_plot   # y-axis
             if i != j && i < j
                 string arrows = createArrowString(self, i, j)
                 string label = createLabelString(self, i, j)
                 matrix mplot = self.scores[,{j,i}]
                 addFactorColumn(add_factor, factor, &mplot)
                 cnameset(mplot, createColumnNamesMplot(add_factor))
-                scalar xrange = calculateValueRange(self.scores[,i])
-                scalar yrange = calculateValueRange(self.scores[,j])
+
+                if self.centre_biplot
+                    scalar xrange = calculateValueRange(self.scores[,i])
+                    scalar yrange = calculateValueRange(self.scores[,j])
+                    string opt_xrange = createRangeString("x", xrange)
+                    string opt_yrange = createRangeString("y", yrange)
+                endif
+
+                if i + j > 3  # print key only for the first biplot
+                    string opt_key = "set nokey"
+                endif
+
 
                 plot mplot
                     options fit=none @opt_dummy
-                    literal set key
+                    printf "%s", opt_key
                     literal set grid
                     # TODO: Transparency required '"'-Anfühungstzeichen -- BUT HOW TO ESCAPE?
                     printf "set linetype 1 lc rgb '#%d0066ff' pt %d ps %g",
@@ -371,8 +389,8 @@ function void pcaBiplot (const bundle self, const string filename[null])
                         j, self.variance_explained[j], self.fontsize
                     literal set xzeroaxis
                     literal set yzeroaxis
-                    printf "set xrange[%g:%g]", -xrange, xrange
-                    printf "set yrange[%g:%g]", -yrange, yrange
+                    printf "%s", createRangeString("y", yrange)
+                    printf "%s", createRangeString("x", xrange)
                     printf "set xtics font ',%d'", self.fontsize
                     printf "set ytics font ',%d'", self.fontsize
                     literal @arrows
@@ -388,6 +406,18 @@ function void pcaBiplot (const bundle self, const string filename[null])
 
     gridplot BiPlots --width=self.width_biplot --height=self.height_biplot \
       --output="@fname" @opt_rows @opt_cols
+end function
+
+
+function string createRangeString (const string axis,
+                                   const scalar value)
+    /* This function takes two parameters: a string axis and a scalar value. It returns a formatted string that sets the range of the specified axis. */
+
+    if ok(value)
+        return sprintf("set %srange[%g:%g]", axis, -xrange, xrange)
+    else
+        return ""
+    endif
 end function
 
 function string getColsBiplot (const int cols)
