@@ -5,9 +5,9 @@ include logging.gfn
 include multiplot.gfn
 include pca_biplot.inp
 
-set workdir "/home/artur/git/pca_biplot/src"
+set workdir "/home/artur/git/pca_biplot"
 
-EXAMPLE = 1
+EXAMPLE = 4
 
 if EXAMPLE == 1
     open mrw.gdt --quiet
@@ -19,6 +19,19 @@ elif EXAMPLE == 3
     #open griliches.gdt --quiet
     open "/home/artur/Universität/Kurse_Eigene/THB/oekonometrie_kurse/common/code/ISL/Credit.csv" -q
     list X = Income Rating Cards #Age #Education Region
+elif EXAMPLE == 4
+    #open griliches.gdt --quiet
+    open "../data/world-happiness-report-2021.csv" -q
+
+    # Rename series
+    rename Socialsupport social
+    rename Healthylifeexpectancy life
+    rename Freedomtomakelifechoices choices
+    rename Generosity generosity
+    rename Perceptionsofcorruption corruption
+
+    list X = social life choices generosity corruption
+    markers --from-series=Regionalindicator
 endif
 
 smpl X --no-missing
@@ -30,8 +43,12 @@ print P
 pcaPrint(P)
 pcaScreePlot(P)
 
+
+# TODO: add variable 'n_pcs_to_plot' to limit the PC to plot
 # Biplot options
-series P.factor = OECD
-# scalar P.cols_biplot = 1
+series P.factor = Regionalindicator
+#scalar P.cols_biplot = 2
+scalar P.n_pcs_to_plot = 3
+scalar P.transparency = 99
 pcaBiplot(P)
 
