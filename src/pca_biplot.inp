@@ -22,10 +22,12 @@ function bundle setDefault (const list X)
     scalar self.offset_label = 0.1
     scalar self.pointtype = 4
     scalar self.pointsize = 1.0
-    scalar self.transparency = 60
-    scalar self.height = 800
-    scalar self.width = 800
-    scalar self.font_yxlabels = 10
+    scalar self.transparency = 90
+    scalar self.height_biplot = 800
+    scalar self.width_biplot = 800
+    scalar self.rows_biplot = NA
+    scalar self.cols_biplot = NA
+    scalar self.fontsize = 10
 
     return self
 end function
@@ -329,6 +331,21 @@ function void pcaBiplot (const bundle self, const string filename[null])
     string fname = exists(filename) ? filename : "display"
     strings BiPlots = array(self.nX * (self.nX - 1)/2)
     scalar count = 1
+    scalar add_factor = FALSE
+
+    if inbundle(self, "factor")
+        if typename(self.factor) == "series"
+            add_factor = TRUE
+            series factor = self.factor
+            list X = self.Z
+            X += factor
+            smpl X --no-missing
+        else
+            Error("Variable 'factor' must be a series.")
+        endif
+    endif
+
+    string opt_dummy = getFactorPlotOption(add_factor)
 
     loop i=1..self.nX       # x-axis
         loop j=1..self.nX   # y-axis
@@ -336,27 +353,28 @@ function void pcaBiplot (const bundle self, const string filename[null])
                 string arrows = createArrowString(self, i, j)
                 string label = createLabelString(self, i, j)
                 matrix mplot = self.scores[,{j,i}]
-
+                addFactorColumn(add_factor, factor, &mplot)
+                cnameset(mplot, createColumnNamesMplot(add_factor))
                 scalar xrange = calculateValueRange(self.scores[,i])
                 scalar yrange = calculateValueRange(self.scores[,j])
 
                 plot mplot
-                    options fit=none
-                    literal set nokey
+                    options fit=none @opt_dummy
+                    literal set key
                     literal set grid
                     # TODO: Transparency required '"'-Anfühungstzeichen -- BUT HOW TO ESCAPE?
                     printf "set linetype 1 lc rgb '#%d0066ff' pt %d ps %g",
                       self.transparency, self.pointtype, self.pointsize
                     printf "set xlabel 'PC %d (%.1f pct.)' font ',%d'",
-                        i, self.variance_explained[i], self.font_yxlabels
+                        i, self.variance_explained[i], self.fontsize
                     printf "set ylabel 'PC %d (%.1f pct.)' font ',%d'",
-                        j, self.variance_explained[j], self.font_yxlabels
+                        j, self.variance_explained[j], self.fontsize
                     literal set xzeroaxis
                     literal set yzeroaxis
                     printf "set xrange[%g:%g]", -xrange, xrange
                     printf "set yrange[%g:%g]", -yrange, yrange
-                    printf "set xtics font ',%d'", self.font_yxlabels
-                    printf "set ytics font ',%d'", self.font_yxlabels
+                    printf "set xtics font ',%d'", self.fontsize
+                    printf "set ytics font ',%d'", self.fontsize
                     literal @arrows
                     literal @label
                 end plot --outbuf=BiPlots[count]
@@ -365,10 +383,61 @@ function void pcaBiplot (const bundle self, const string filename[null])
         endloop
     endloop
 
+    string opt_rows = getRowsBiplot(self.rows_biplot)
+    string opt_cols = getColsBiplot(self.cols_biplot)
 
-    gridplot BiPlots --width=self.width --height=self.height --output="@fname"
+    gridplot BiPlots --width=self.width_biplot --height=self.height_biplot \
+      --output="@fname" @opt_rows @opt_cols
 end function
 
+function string getColsBiplot (const int cols)
+    /* String for 'gridplot' command setting the number of cols for the plot. */
+    string S
+    if ok(cols)
+        string S = sprintf("--cols=%d", cols)
+    endif
+
+    return S
+end function
+
+function string getRowsBiplot (const int rows)
+    /* String for 'gridplot' command setting the number of rows for the plot. */
+    string S
+    if ok(rows)
+        string S = sprintf("--rows=%d", rows)
+    endif
+
+    return S
+end function
+
+
+function strings createColumnNamesMplot (const bool add_factor)
+    strings S = defarray(":", ":")
+    S += add_factor == TRUE ? "F" : S
+    return S
+end function
+
+function string getFactorPlotOption (const bool add_factor)
+    /* Create gnuplot option string dependend if add_factor is TRUE. */
+
+    string s = ""
+
+    if add_factor
+        s = "dummy"
+    endif
+
+    return s
+end function
+
+function void addFactorColumn (const bool add_factor,
+                               const series factor,
+                               matrix *mat)
+    /* This function addFactorColumn takes three parameters: a boolean add_factor, a series factor, and a pointer to a matrix mat. If add_factor is true, the function appends the factor series to the matrix mat. */
+
+    if add_factor
+        mat ~= {factor}
+    endif
+end function
 
 
 function void pcaScreePlot (const bundle self, const string filename[null])
@@ -382,11 +451,11 @@ function void pcaScreePlot (const bundle self, const string filename[null])
     plot mplot
         options with-lines time-series
         printf "set ylabel 'Percentage of variance' font ',%d'",
-          self.font_yxlabels
+          self.fontsize
         printf "set xlabel 'Principal components' \
-                font ',%d'", self.font_yxlabels
-        printf "set xtics font ',%d'", self.font_yxlabels
-        printf "set ytics font ',%d'", self.font_yxlabels
+                font ',%d'", self.fontsize
+        printf "set xtics font ',%d'", self.fontsize
+        printf "set ytics font ',%d'", self.fontsize
         literal set linetype 1 lw 3
         literal set grid
         printf "set yrange[0:%g]", max_value

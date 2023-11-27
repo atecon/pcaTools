@@ -22,11 +22,16 @@ elif EXAMPLE == 3
 endif
 
 smpl X --no-missing
-smpl obs < 25 --restrict
+#smpl obs < 25 --restrict
 
 
 bundle P = pcaTools(X)
 print P
 pcaPrint(P)
 pcaScreePlot(P)
+
+# Biplot options
+series P.factor = OECD
+# scalar P.cols_biplot = 1
 pcaBiplot(P)
+
