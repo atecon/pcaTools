@@ -113,7 +113,8 @@ function void doSvdAndStoreResult (bundle *self)
 
     matrix self.V = V'  # make sure columns refer to the m-th component
     rnameset(self.V, self.vnames)
-    cnameset(self.V, createCnamesComponents(self.nX))
+    strings cnames = createCnamesComponents(self.nX)
+    cnameset(self.V, cnames)
 
     matrix self.U = U   # these are the loadings (aka standard coordinates)
     matrix self.UD = self.U .* self.D  # principal coordinates
@@ -361,8 +362,11 @@ function void pcaBiplot (const bundle self, const string filename[null])
                 string arrows = createArrowString(self, i, j)
                 string label = createLabelString(self, i, j)
                 matrix mplot = self.scores[,{j,i}]
-                addFactorColumn(add_factor, factor, &mplot)
-                cnameset(mplot, createColumnNamesMplot(add_factor))
+                if add_factor
+                    addFactorColumn(add_factor, factor, &mplot)
+                endif
+                strings cnames = createColumnNamesMplot(add_factor)
+                cnameset(mplot, cnames)
 
                 if self.centre_biplot
                     scalar xrange = calculateValueRange(self.scores[,i])
@@ -443,7 +447,9 @@ end function
 
 function strings createColumnNamesMplot (const bool add_factor)
     strings S = defarray(":", ":")
-    S += add_factor == TRUE ? "F" : S
+    if add_factor == TRUE
+        S += "F"
+    endif
     return S
 end function
 
