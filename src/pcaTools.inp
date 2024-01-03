@@ -122,6 +122,7 @@ end function
 
 function matrix varianceExplained (const matrix eigenvalues)
     /* Compute variance explained in percent. */
+
     matrix v = eigenvalues ./ sum(eigenvalues) .* 100
     cnameset(v, createCnamesComponents(nelem(v)))
 
@@ -130,6 +131,8 @@ end function
 
 
 function strings createCnamesComponents (const int nX[1::])
+    /* Create an array of column names. */
+
     strings clabels = array(nX)
     loop i=1..nX
         clabels[i] = sprintf("PC %d", $i)
@@ -171,8 +174,7 @@ end function
 
 
 function bundle pcaEst (const list X "Features",
-                          bundle opts[null])
-
+                        bundle opts[null])
     /*
         const string filename[null] "Optional: path of figure to save",
         const bool use_vcv[FALSE] "Optional: Use VCV instead of correlation")
@@ -188,9 +190,6 @@ function bundle pcaEst (const list X "Features",
     getTypeXX(&self)
     printTypeXX(self)
 
-    #string opt_quiet = self.verbose == TRUE ? "" : "--quiet"
-    #string opt_type_xx = self.use_vcv == TRUE ? "--covariance" : ""
-
     smpl X --no-missing
     updateT(&self)
     matrix self.Z = getStdizedMatrix(X, self)
@@ -200,13 +199,17 @@ function bundle pcaEst (const list X "Features",
     matrix self.variance_explained = varianceExplained(self.eigenvalues)
     matrix self.scores = computePCAScores(self.Z, self.U)
 
-    # TODO; only for debugging
+    /*
+    # Only for debugging
     pca stdize(X) --covariance #--save-all
-    #list PC = PC*
-    #print PC -o
-    #print self.scores
+    list PC = PC*
+    print PC -o
+    print self.scores
+    stop
+    */
 
-    /* EVD
+    /*
+    # Eigenvalue decomposition by hand
     matrix eigenvectors
     eigensym(self.ZZ, &eigenvectors)
     eigenvectors = mreverse(eigenvectors, TRUE)
@@ -235,6 +238,7 @@ end function
 
 
 function void printPVE (const bundle self)
+    /* Print variances explained. */
 
     matrix M = self.eigenvalues'
     M ~= self.D'
@@ -339,6 +343,7 @@ function void pcaBiplot (const bundle self, const string filename[null])
     scalar xrange = NA
     scalar yrange = NA
     string opt_key = "set key"
+    string opt_rows, opt_cols
 
     if inbundle(self, "factor")
         if typename(self.factor) == "series"
@@ -353,7 +358,6 @@ function void pcaBiplot (const bundle self, const string filename[null])
     endif
 
     string opt_dummy = getFactorPlotOption(add_factor)
-
 
     loop i=1..n_pcs_to_plot       # x-axis
         loop j=1..n_pcs_to_plot   # y-axis
@@ -378,18 +382,14 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     string opt_key = "set nokey"
                 endif
 
-
                 plot mplot
                     options fit=none @opt_dummy
                     printf "%s", opt_key
                     literal set grid
-                    # TODO: Transparency required '"'-Anfühungstzeichen -- BUT HOW TO ESCAPE?
-                    printf "set linetype 1 lc rgb '#%d0066ff' pt %d ps %g",
-                      self.transparency, self.pointtype, self.pointsize
-                    printf "set xlabel 'PC %d (%.1f pct.)' font ',%d'",
-                        i, self.variance_explained[i], self.fontsize
-                    printf "set ylabel 'PC %d (%.1f pct.)' font ',%d'",
-                        j, self.variance_explained[j], self.fontsize
+                    # TODO: Transparency requires '"'-Anführungszeichen -- BUT HOW TO ESCAPE?
+                    printf "set linetype 1 lc rgb \"#%x0066ff\" pt %d ps %g\n", self.transparency, self.pointtype, self.pointsize
+                    printf "set xlabel 'PC %d (%.1f pct.)' font ',%d'\n", i, self.variance_explained[i], self.fontsize
+                    printf "set ylabel 'PC %d (%.1f pct.)' font ',%d'\n", j, self.variance_explained[j], self.fontsize
                     literal set xzeroaxis
                     literal set yzeroaxis
                     printf "%s", createRangeString("y", yrange)
@@ -404,8 +404,13 @@ function void pcaBiplot (const bundle self, const string filename[null])
         endloop
     endloop
 
-    string opt_rows = getRowsBiplot(self.rows_biplot)
-    string opt_cols = getColsBiplot(self.cols_biplot)
+
+    if ok(self.rows_biplot) && self.rows_biplot < self.n_pcs_to_plot
+        string opt_rows = getRowsBiplot(self.rows_biplot)
+    endif
+    if ok(self.cols_biplot) && self.cols_biplot < self.n_pcs_to_plot
+        string opt_cols = getColsBiplot(self.cols_biplot)
+    endif
 
     gridplot BiPlots --width=self.width_biplot --height=self.height_biplot \
       --output="@fname" @opt_rows @opt_cols
@@ -492,8 +497,22 @@ function void pcaScreeplot (const bundle self, const string filename[null])
                 font ',%d'", self.fontsize
         printf "set xtics font ',%d'", self.fontsize
         printf "set ytics font ',%d'", self.fontsize
-        literal set linetype 1 lw 3
+        printf "set linetype 1 lw %d", self.linewidth
         literal set grid
         printf "set yrange[0:%g]", max_value
     end plot --output="@fname"
 end function
+
+
+
+
+
+
+
+
+
+
+
+
+
+
