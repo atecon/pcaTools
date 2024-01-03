@@ -1,0 +1,11 @@
+author = Artur Tarassow
+email = atecon@posteo.de
+version = 0.1
+date = 2024-01-03
+description = Collection of tools for doing PCA
+tags = C10
+min-version = 2023c
+public = pcaEst pcaPrint pcaScreeplot pcaBiplot
+help = pcaTools_help.md
+sample-script = pcaTools_sample.inp
+depends = logging PairPlot
