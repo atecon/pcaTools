@@ -386,8 +386,6 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     string opt_yrange = createRangeString("y", yrange)
                 endif
 
-                print opt_xrange opt_yrange
-
                 if (i + j) > 3  # print key only for the first biplot
                     string opt_key = "set nokey"
                 endif
