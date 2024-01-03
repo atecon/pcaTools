@@ -17,19 +17,23 @@ function bundle setDefault (const list X)
     scalar self.verbose = FALSE
 
     # Tweaks for biplot
-    scalar self.centre_biplot = FALSE # if TRUE, zeros are centred on both axis
+    scalar self.centre_biplot = TRUE # if TRUE, zeros are centred on both axis
     scalar self.cols_biplot = NA  # NA: set automatically
-    scalar self.fontsize = 10
+    string self.color_arrow = "black"
+    string self.color_pattern = "dark2"
+    scalar self.fontsize = 12
+    scalar self.fontsize_arrow = 12
     string self.filename = "display"
-    scalar self.height_biplot = 800
+    scalar self.height_biplot = 600
     scalar self.linewidth = 1.5
+    scalar self.linewidth_arrow = 2.0
     scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
     scalar self.offset_label = 0.1
-    scalar self.pointtype = 4
+    scalar self.pointtype = 7
     scalar self.pointsize = 1.0
     scalar self.rows_biplot = NA  # NA: set automatically
-    scalar self.transparency = 90 # min: 0, max: 255
-    scalar self.width_biplot = 800
+    scalar self.transparency = 150 # min: 0, max: 255
+    scalar self.width_biplot = 600
 
     return self
 end function
@@ -283,9 +287,11 @@ function string createArrowString (const bundle self,
         #set arrow 1 from <x1>, second <y1> to <x2>, second <y2>
 
 
-        arrow += sprintf("set arrow to %g,%g lt 1 lw 1 lc rgb 'red'\n",
+        arrow += sprintf("set arrow to %g,%g lt 1 lw %d lc rgb '%s'\n",
                          self.V[l,pc1],
-                         self.V[l,pc2])
+                         self.V[l,pc2],
+                         self.linewidth_arrow,
+                         self.color_arrow)
     endloop
 
     return arrow
@@ -306,10 +312,12 @@ function string createLabelString (const bundle self,
     string label = ""
 
     loop l=1..self.nX
-        label += sprintf("set label '%s' at %g,%g tc rgb 'red'\n",
+        label += sprintf("set label '%s' at %g,%g tc rgb '%s' font ',%d' front\n",
                          self.vnames[l],
                          (self.offset_label + self.V[l,pc1]),
-                         (self.offset_label + self.V[l,pc2]) )
+                         (self.offset_label + self.V[l,pc2]),
+                         self.color_arrow,
+                         self.fontsize_arrow)
     endloop
 
     return label
@@ -378,6 +386,8 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     string opt_yrange = createRangeString("y", yrange)
                 endif
 
+                print opt_xrange opt_yrange
+
                 if (i + j) > 3  # print key only for the first biplot
                     string opt_key = "set nokey"
                 endif
@@ -386,8 +396,9 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     options fit=none @opt_dummy
                     printf "%s", opt_key
                     literal set grid
-                    # TODO: Transparency requires '"'-Anführungszeichen -- BUT HOW TO ESCAPE?
-                    printf "set linetype 1 lc rgb \"#%x0066ff\" pt %d ps %g\n", self.transparency, self.pointtype, self.pointsize
+                    # TODO: only the 1st factor is transparent currently
+                    #printf "set linetype 1 lc rgb \"#%x0066ff\" pt %d ps %g\n", self.transparency, self.pointtype, self.pointsize
+                    printf "%s", createPointCommands(self)
                     printf "set xlabel 'PC %d (%.1f pct.)' font ',%d'\n", i, self.variance_explained[i], self.fontsize
                     printf "set ylabel 'PC %d (%.1f pct.)' font ',%d'\n", j, self.variance_explained[j], self.fontsize
                     literal set xzeroaxis
@@ -404,16 +415,82 @@ function void pcaBiplot (const bundle self, const string filename[null])
         endloop
     endloop
 
-
-    if ok(self.rows_biplot) && self.rows_biplot < self.n_pcs_to_plot
-        string opt_rows = getRowsBiplot(self.rows_biplot)
-    endif
-    if ok(self.cols_biplot) && self.cols_biplot < self.n_pcs_to_plot
-        string opt_cols = getColsBiplot(self.cols_biplot)
-    endif
+    string opt_rows = getRowsBiplot(self.rows_biplot)
+    string opt_cols = getColsBiplot(self.cols_biplot)
 
     gridplot BiPlots --width=self.width_biplot --height=self.height_biplot \
       --output="@fname" @opt_rows @opt_cols
+end function
+
+
+function string createPointCommands (const bundle self)
+    /*
+    This is a Gretl function that creates a string of plotting commands for
+    the biplot.
+
+    Arguments:
+    self (bundle): A bundle object that contains the following elements:
+    - color_pattern (string): Defines the color pattern to use for the points.
+    - nX (int): The number of points to plot.
+    - transparency (int): The transparency level for the points, represented
+      as a hexadecimal integer.
+    - pointtype (int): The type of points to plot.
+    - pointsize (float): The size of the points.
+
+    Returns:
+    cmd (string): A string of point plotting commands */
+
+    string cmd
+    strings colors = get_color_definitions(self.color_pattern)
+
+    loop i=1..self.nX
+        cmd += sprintf("set linetype $i lc rgb \"#%x%s\" pt %d ps %g\n", self.transparency, colors[i], self.pointtype, self.pointsize)
+    endloop
+
+    return cmd
+end function
+
+
+function strings get_color_definitions (string which)
+    /* Used for biplot. Put your own definitions here. */
+
+    if which != "default" || which != "dark2"
+        which = "dark2"
+    endif
+
+    if which == "default"
+        return defarray(\
+                        "C41E3A", \
+                        "4682B4", \
+                        "FFBF00", \
+                        "ff0000", \
+                        "00cc00", \
+                        "8faab3", \
+                        "0000ff", \
+                        "bf25b2", \
+                        "ffa500"\
+                        )
+    elif which == "dark2"
+        return defarray(\
+                        "1B9E77",\
+                        "D95F02",\
+                        "7570B3",\
+                        "E7298A",\
+                        "66A61E",\
+                        "E6AB02",\
+                        "A6761D",\
+                        "666666",\
+                        "C41E3A",\
+                        "4682B4",\
+                        "FFBF00",\
+                        "ff0000",\
+                        "00cc00",\
+                        "8faab3",\
+                        "0000ff",\
+                        "bf25b2",\
+                        "ffa500"\
+                        )
+    endif
 end function
 
 
@@ -422,7 +499,7 @@ function string createRangeString (const string axis,
     /* This function takes two parameters: a string axis and a scalar value. It returns a formatted string that sets the range of the specified axis. */
 
     if ok(value)
-        return sprintf("set %srange[%g:%g]", axis, -xrange, xrange)
+        return sprintf("set %srange[%g:%g]", axis, -value, value)
     else
         return ""
     endif
@@ -502,17 +579,3 @@ function void pcaScreeplot (const bundle self, const string filename[null])
         printf "set yrange[0:%g]", max_value
     end plot --output="@fname"
 end function
-
-
-
-
-
-
-
-
-
-
-
-
-
-
