@@ -1,96 +1,38 @@
-#clear
+clear
 set verbose off
 
-include logging.gfn
-#include multiplot.gfn
-include pcaTools.inp
+include pcaTools.gfn
 
-set workdir "/home/artur/git/pcaTools"
-
-EXAMPLE = 4
+# SELECT an example to run
+EXAMPLE = 1
 
 if EXAMPLE == 1
-    open mrw.gdt --quiet
+    open mrw.gdt --quiet --preserve
     list X = gdp60 gdp85 inv
 elif EXAMPLE == 2
-    open griliches.gdt --quiet
-    list X = med iq age s #expr lw
-elif EXAMPLE == 3
-    #open griliches.gdt --quiet
-    open "/home/artur/Universität/Kurse_Eigene/THB/oekonometrie_kurse/common/code/ISL/Credit.csv" -q
-    list X = Income Rating Cards #Age #Education Region
-elif EXAMPLE == 4
-    #open griliches.gdt --quiet
-    open "../data/world-happiness-report-2021.csv" -q
-
-    # Rename series
-    rename Socialsupport social
-    rename Healthylifeexpectancy life
-    rename Freedomtomakelifechoices choices
-    rename Generosity generosity
-    rename Perceptionsofcorruption corruption
-
-    list X = social life choices generosity corruption
-    list X = dataset
-    markers --from-series=Regionalindicator
+    open griliches.gdt --quiet --preserve
+    list X = med age lw expr
 endif
 
 smpl X --no-missing
-#smpl obs < 25 --restrict
-
 
 bundle P = pcaEst(X)
-print P
-pcaPrint(P)
-pcaScreeplot(P)
+#print P
+#pcaPrint(P)
+#pcaScreeplot(P)
 
+# Biplot
+if EXAMPLE == 2
+    series P.factor = mrt  # factorized biplot
+endif
 
-# Biplot options
-series P.factor = Regionalindicator
-#scalar P.cols_biplot = 2
+# All parameters are optional -- activate if wished
 scalar P.n_pcs_to_plot = 2
-scalar P.transparency = 99
+#scalar P.pointtype = 7
+#scalar P.transparency = 200
+#scalar P.linewidth_arrow = 3
+#scalar P.fontsize_arrow = 12
+#scalar P.offset_label = 0.25
+#string P.color_arrow = "blue"
+
 pcaBiplot(P)
-
-stop
-
-
-
-
-# PCA and OLS regression
-pca X --save=3
-# ols PC1 const X --robust  # fail due to multicollinearity
-# ols PC2 const X --robust
-
-# sparse regression
-include fsboost.gfn
-help fsboost
-
-list Xstd = stdize(X)
-
-#bundle opts = _(learning_rate0.0002) # optional parameter
-bundle FSB_PC1 = fsreg(PC1, Xstd)
-print_fsboost_results(FSB_PC1)
-series spc1 = fsboost_predict(Xstd,FSB_PC1)
-
-bundle FSB_PC2 = fsreg(PC2, Xstd)
-print_fsboost_results(FSB_PC2)
-series spc2 = fsboost_predict(Xstd,FSB_PC2)
-
-bundle FSB_PC3 = fsreg(PC3, Xstd)
-print_fsboost_results(FSB_PC3)
-series spc3 = fsboost_predict(Xstd,FSB_PC3)
-
-corr PC1 PC2 PC3 spc1 spc2 spc3 --triangle --plot=display
-
-strings Plots = array(3)
-gpbuild Plots
-    gnuplot PC1 spc1 --outbuf=Plots[1]
-    gnuplot PC2 spc2 --outbuf=Plots[2]
-    gnuplot PC3 spc3 --outbuf=Plots[3]
-end gpbuild
-
-gridplot Plots --output=display
-
-
-
