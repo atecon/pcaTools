@@ -1,0 +1,58 @@
+/* Written by Jack */
+
+set verbose off
+
+function string confidence_ellipse_plot (matrix V, matrix b, scalar alpha,
+                                         string iname, string jname)
+
+    ### port from libgretl C function
+
+    scalar zcrit = -invcdf(z, (1-alpha)/2)
+    scalar chicrit = invcdf(x, 2, alpha)
+    scalar cval = 100 * alpha
+
+    maxerr = zcrit * sqrt(diag(V))
+    W = {}
+
+    matrix e = eigensym(V, &W)
+    matrix coeff = W .* sqrt(chicrit.*e)'
+    string title = sprintf("%g%% confidence ellipse and %g%% marginal intervals", cval, cval)
+    string fname
+
+
+    outfile fname --tempfile=fname
+        printf "set title '%s'\n", title
+
+        printf "# literal lines = 9\n"
+        printf "set parametric\n"
+        printf "set xzeroaxis\n"
+        printf "set yzeroaxis\n"
+
+        printf "set xlabel '%s'\n", iname
+        printf "set ylabel '%s'\n", jname
+        printf "set label '%.3g, %.3g' at ", b[1], b[2]
+
+        set force_decpoint on
+
+        printf "%g,%g point lt 2 pt 1 offset 3,3\n", b[1], b[2]
+
+        printf "x(t) = %g*cos(t)%+g*sin(t)%+g\n", coeff[1,2], coeff[1,1], b[1]
+        printf "y(t) = %g*cos(t)%+g*sin(t)%+g\n", coeff[2,2], coeff[2,1], b[2]
+
+        printf "plot x(t), y(t) notitle, \\\n"
+        printf "%g, y(t) notitle w lines lt 2, \\\n", b[1] - maxerr[1]
+        printf "%g, y(t) notitle w lines lt 2, \\\n", b[1] + maxerr[1]
+        printf "x(t), %g notitle w lines lt 2, \\\n", b[2] - maxerr[2]
+        printf "x(t), %g notitle w lines lt 2\n", b[2] + maxerr[2]
+    end outfile
+
+    gnuplot --input="@fname" --output=display
+    return fname
+end function
+
+### --- usage example -----------------------------------------------------
+
+open griliches.gdt --quiet
+ols lw const iq kww expr tenure -w
+sel = {2,3}
+confidence_ellipse_plot($vcv[sel,sel], $coeff[sel], 0.95, "IQ", "KWW") 
