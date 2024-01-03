@@ -93,11 +93,11 @@ No return value. This function generates a bi-plot.
 
 One can tweak the plot by passing specific parameters to the bundle `self` before calling `pcaBiplot`. The following parameters are supported:
 
-- `centre_biplot`, bool, Centre the axes if `TRUE`, otherwise not (default: `FALSE`).
+- `centre_biplot`: bool, Centre the axes if `TRUE`, otherwise not (default: `TRUE`).
 - `cols_biplot`: int, Number of columns of gridplot (default: `NA` -> automatically set)
 - `color_arrow`: string, Color of the arrows depicting the eigenvector (default: "black")
 - `color_pattern`: string, Color pattern for (factorized) data points of biplot. Either "dark2" or "default" (default: `dark2`).
-- `factor`: series, Series of distinct values for factorized bi-plot (default: none)
+- `factor`: series, Distinct values for factorized bi-plot (default: none)
 - `fontsize`: int, Size of font (default: 12)
 - `fontsize_arrow`: int, Size of font of the arrow labels (default: 12)
 - `height_biplot`: int, Height of biplot (default: 600)
