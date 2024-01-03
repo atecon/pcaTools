@@ -17,18 +17,19 @@ function bundle setDefault (const list X)
     scalar self.verbose = FALSE
 
     # Tweaks for biplot
-    scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
+    scalar self.centre_biplot = FALSE # if TRUE, zeros are centred on both axis
+    scalar self.cols_biplot = NA  # NA: set automatically
+    scalar self.fontsize = 10
     string self.filename = "display"
+    scalar self.height_biplot = 800
+    scalar self.linewidth = 1.5
+    scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
     scalar self.offset_label = 0.1
     scalar self.pointtype = 4
     scalar self.pointsize = 1.0
-    scalar self.transparency = 90
-    scalar self.height_biplot = 800
-    scalar self.width_biplot = 800
     scalar self.rows_biplot = NA  # NA: set automatically
-    scalar self.cols_biplot = NA  # NA: set automatically
-    scalar self.fontsize = 10
-    scalar self.centre_biplot = FALSE # if TRUE, zeros are centred on both axis
+    scalar self.transparency = 90 # min: 0, max: 255
+    scalar self.width_biplot = 800
 
     return self
 end function
