@@ -22,10 +22,9 @@ This function performs Principal Component Analysis (PCA) on the input data.
 
 `opts` can include the following parameter for setting options:
 
-- `do_stdize`:
-- `n_pcs_to_plot`:
-- `use_vcv`:
-- `verbose`:
+- `do_stdize`: bool, Centre variables and divide by their respective standard deviattion (default: `TRUE`)
+- `use_vcv`: bool, Compute principal components based on variance-covariance matrix if `TRUE`, otherwise if `FALSE` use the correlation matrix (default: `TRUE`)
+- `verbose`: bool, Make output more verbose if `TRUE` (default: `FALSE`)
 
 
 ## Returns
