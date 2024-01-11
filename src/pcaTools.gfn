@@ -16,6 +16,17 @@ The package is a collection of functions for conducting Principal Component Anal
 Please report bugs or comments on the gretl mailing list, report an issue on github (https://github.com/atecon/pcaTools/issues) or write to atecon@posteo.de.
 
 
+# Install from local file
+
+Download the gfn-file which you find here https://github.com/atecon/pcaTools/blob/main/src/pcaTools.gfn
+
+To install the package, run the following Gretl command:
+
+```
+pkg install /path/to/pcaTools.gfn --local
+```
+
+
 # Public functions
 
 ```
