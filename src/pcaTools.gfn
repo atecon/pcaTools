@@ -1,0 +1,772 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gretl-functions>
+<gretl-function-package name="pcaTools" minver="2023c">
+<author email="atecon@posteo.de">Artur Tarassow</author>
+<version>0.1</version>
+<date>2024-01-03</date>
+<description>Collection of tools for doing PCA</description>
+<tags>C10</tags>
+<help filename="pcaTools_help.md">
+# pcaTools
+
+This package augments Gretl's built-in `pca` command.
+
+The package is a collection of functions for conducting Principal Component Analysis. It ships two plotting functions for creating a so called 'scree plot' (https://en.wikipedia.org/wiki/Scree_plot) and a bi-plot (https://en.wikipedia.org/wiki/Biplot).
+
+Please report bugs or comments on the gretl mailing list, report an issue on github (https://github.com/atecon/pcaTools/issues) or write to atecon@posteo.de.
+
+
+# Public functions
+
+```
+pcaEst(const list X, bundle opts[null])
+```
+
+This function performs Principal Component Analysis (PCA) on the input data.
+
+## Parameters
+
+- `X`: list, Variables on which to conduct PCA.
+- `opts`: bundle, Optional bundle passing parameters
+
+`opts` can include the following parameter for setting options:
+
+- `do_stdize`: bool, Centre variables and divide by their respective standard deviattion (default: `TRUE`)
+- `use_vcv`: bool, Compute principal components based on variance-covariance matrix if `TRUE`, otherwise if `FALSE` use the correlation matrix (default: `TRUE`)
+- `verbose`: bool, Make output more verbose if `TRUE` (default: `FALSE`)
+
+
+## Returns
+
+A bundle `self` containing the results of the PCA.
+
+
+
+```
+pcaPrint(const bundle self)
+```
+
+This function prints the results of a PCA analysis.
+
+
+## Parameters
+
+- `self`: bundle, Returned information from the `pcaEst()` function.
+
+## Returns
+
+No return value. This function prints the PCA results to the console.
+
+
+
+```
+pcaScreeplot(const bundle self, const string filename[null])
+```
+
+This function generates a scree plot from the results of a PCA analysis. A scree plot is a line plot of the eigenvalues of factors or principal components in an analysis.
+
+## Parameters
+
+- `self`: A bundle containing the results of a PCA, typically returned by `pcaEst`.
+- `filename`: A string referring to the PATH+FILENAME for storing the plot (optional). If no string is passed, the plot appears on the screen immediately.
+
+One can tweak the plot by passing specific parameters to the bundle `self` before calling `pcaScreeplot()`. The following parameters are supported:
+
+- `fontsize`: Size of font (default: 10)
+- `linedwidth`: Width of the line (default: 1.5)
+
+## Returns
+
+No return value. This function creates a scree plot.
+
+
+```
+pcaBiplot(const bundle self, const string filename[null])
+```
+
+This function generates a bi-plot from the results of a PCA analysis for each combination of computed principal components as a matrix of plots. A biplot is a plot of two principal components. It shows the combination of scores and the loading factors for each principal component.
+
+## Parameters
+
+- `self`: A bundle containing the results of a PCA, typically returned by `pcaEst`.
+- `filename`: A string referring to the PATH+FILENAME for storing the plot (optional). If no string is passed, the plot appears on the screen immediately.
+
+
+## Returns
+
+No return value. This function generates a bi-plot.
+
+
+## Options passed to the PairPlot() function by means of the 'opts' bundle
+
+One can tweak the plot by passing specific parameters to the bundle `self` before calling `pcaBiplot`. The following parameters are supported:
+
+- `centre_biplot`: bool, Centre the axes if `TRUE`, otherwise not (default: `TRUE`).
+- `cols_biplot`: int, Number of columns of gridplot (default: `NA` -&gt; automatically set)
+- `color_arrow`: string, Color of the arrows depicting the eigenvector (default: &quot;black&quot;)
+- `color_pattern`: string, Color pattern for (factorized) data points of biplot. Either &quot;dark2&quot; or &quot;default&quot; (default: `dark2`).
+- `factor`: series, Distinct values for factorized bi-plot (default: none)
+- `fontsize`: int, Size of font (default: 12)
+- `fontsize_arrow`: int, Size of font of the arrow labels (default: 12)
+- `height_biplot`: int, Height of biplot (default: 600)
+- `linedwidth`: scalar, Width of the line (default: 1.5)
+- `linedwidth_arrow`: scalar, Width of the lines for the bi-plot arrows (default: 2.0)
+- `n_pcs_to_plot`: int, Number of first principal components to plot (default: all)
+- `offset_label`: scalar, Offset of labels for arrows (default: 0.1)
+- `pointtype`: int, Point type (default: 4)
+- `pointsize`: scalar, Size of point (default: 1.0)
+- `rows_biplot`: int, Number of rows of gridplot (default: `NA` -&gt; automatically set)
+- `width_biplot`: int, Width of biplot (default: 600)
+- `transparency`: int, The rgbalpha plotting style assumes that each pixel of input data contains an alpha value in the range [0:255] (no transparency:full transparency). Currently, only applied to the 1st factor.
+
+# Changelog
+
+* **v0.1 (January 2024)**
+    * Initial version
+</help>
+<depends count="2">
+logging PairPlot </depends>
+<gretl-function name="pcaEst" type="bundle">
+ <params count="2">
+  <param name="X" type="list" const="true">
+<description>Features</description>
+  </param>
+  <param name="opts" type="bundle" optional="true"/>
+ </params>
+<code>/*
+const string filename[null] &quot;Optional: path of figure to save&quot;, const bool use_vcv[FALSE] &quot;Optional: Use VCV instead of correlation&quot;)
+*/
+
+/* Compute PCA and plot the biplot for all combinations among X. */
+
+bundle self = setDefault(X)
+if exists(opts)
+  bundle self = self + opts
+endif
+strings self.vnames = varnames(X)
+getTypeXX(&amp;self)
+printTypeXX(self)
+
+smpl X --no-missing
+updateT(&amp;self)
+matrix self.Z = getStdizedMatrix(X, self)
+matrix self.ZZ = self.Z'self.Z
+doSvdAndStoreResult(&amp;self)
+matrix self.eigenvalues = computeEigenvalues(self)
+matrix self.variance_explained = varianceExplained(self.eigenvalues)
+matrix self.scores = computePCAScores(self.Z, self.U)
+
+/*
+# Only for debugging
+pca stdize(X) --covariance #--save-all
+list PC = PC*
+print PC -o
+print self.scores
+stop
+*/
+
+/*
+# Eigenvalue decomposition by hand
+matrix eigenvectors
+eigensym(self.ZZ, &amp;eigenvectors)
+eigenvectors = mreverse(eigenvectors, TRUE)
+print mreverse(self.U)
+print eigenvectors
+stop
+*/
+
+return self
+</code>
+</gretl-function>
+<gretl-function name="pcaPrint" type="void">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>/* Print results */
+
+printTitle(self)
+printPVE(self)
+printLoadings(self)
+</code>
+</gretl-function>
+<gretl-function name="pcaScreeplot" type="void">
+ <params count="2">
+  <param name="self" type="bundle" const="true"/>
+  <param name="filename" type="string" optional="true" const="true"/>
+ </params>
+<code>/* Create screeplot */
+
+string fname = exists(filename) ? filename : &quot;display&quot;
+matrix mplot = self.variance_explained'
+scalar max_value = max(self.variance_explained') * 1.025
+max_value = xmin(max_value, 100)
+
+plot mplot
+  options with-lines time-series
+  printf &quot;set ylabel 'Percentage of variance' font ',%d'&quot;, self.fontsize
+  printf &quot;set xlabel 'Principal components'                  font ',%d'&quot;, self.fontsize
+  printf &quot;set xtics font ',%d'&quot;, self.fontsize
+  printf &quot;set ytics font ',%d'&quot;, self.fontsize
+  printf &quot;set linetype 1 lw %d&quot;, self.linewidth
+  literal set grid
+  printf &quot;set yrange[0:%g]&quot;, max_value
+end plot --output=&quot;@fname&quot;
+</code>
+</gretl-function>
+<gretl-function name="pcaBiplot" type="void">
+ <params count="2">
+  <param name="self" type="bundle" const="true"/>
+  <param name="filename" type="string" optional="true" const="true"/>
+ </params>
+<code>/* Create biplot */
+
+string fname = exists(filename) ? filename : &quot;display&quot;
+scalar n_pcs_to_plot = ok(self.n_pcs_to_plot) ? self.n_pcs_to_plot : self.nX
+strings BiPlots = array(n_pcs_to_plot * (n_pcs_to_plot - 1)/2)
+scalar count = 1
+scalar add_factor = FALSE
+scalar xrange = NA
+scalar yrange = NA
+string opt_key = &quot;set key&quot;
+string opt_rows, opt_cols
+
+if inbundle(self, &quot;factor&quot;)
+  if typename(self.factor) == &quot;series&quot;
+    add_factor = TRUE
+    series factor = self.factor
+    list X = self.Z
+    X += factor
+    smpl X --no-missing
+  else
+    Error(&quot;Variable 'factor' must be a series.&quot;)
+  endif
+endif
+
+string opt_dummy = getFactorPlotOption(add_factor)
+
+loop i=1..n_pcs_to_plot       # x-axis
+  loop j=1..n_pcs_to_plot   # y-axis
+    if i != j &amp;&amp; i &lt; j
+      string arrows = createArrowString(self, i, j)
+      string label = createLabelString(self, i, j)
+      matrix mplot = self.scores[,{j,i}]
+      if add_factor
+        addFactorColumn(add_factor, factor, &amp;mplot)
+      endif
+      strings cnames = createColumnNamesMplot(add_factor)
+      cnameset(mplot, cnames)
+
+      if self.centre_biplot
+        scalar xrange = calculateValueRange(self.scores[,i])
+        scalar yrange = calculateValueRange(self.scores[,j])
+        string opt_xrange = createRangeString(&quot;x&quot;, xrange)
+        string opt_yrange = createRangeString(&quot;y&quot;, yrange)
+      endif
+
+      if (i + j) &gt; 3  # print key only for the first biplot
+        string opt_key = &quot;set nokey&quot;
+      endif
+
+      plot mplot
+        options fit=none @opt_dummy
+        printf &quot;%s&quot;, opt_key
+        literal set grid
+        # TODO: only the 1st factor is transparent currently
+        #printf &quot;set linetype 1 lc rgb \&quot;#%x0066ff\&quot; pt %d ps %g\n&quot;, self.transparency, self.pointtype, self.pointsize
+        printf &quot;%s&quot;, createPointCommands(self)
+        printf &quot;set xlabel 'PC %d (%.1f pct.)' font ',%d'\n&quot;, i, self.variance_explained[i], self.fontsize
+        printf &quot;set ylabel 'PC %d (%.1f pct.)' font ',%d'\n&quot;, j, self.variance_explained[j], self.fontsize
+        literal set xzeroaxis
+        literal set yzeroaxis
+        printf &quot;%s&quot;, createRangeString(&quot;y&quot;, yrange)
+        printf &quot;%s&quot;, createRangeString(&quot;x&quot;, xrange)
+        printf &quot;set xtics font ',%d'&quot;, self.fontsize
+        printf &quot;set ytics font ',%d'&quot;, self.fontsize
+        literal @arrows
+        literal @label
+      end plot --outbuf=BiPlots[count]
+      count++
+    endif
+  endloop
+endloop
+
+string opt_rows = getRowsBiplot(self.rows_biplot)
+string opt_cols = getColsBiplot(self.cols_biplot)
+
+gridplot BiPlots --width=self.width_biplot --height=self.height_biplot --output=&quot;@fname&quot; @opt_rows @opt_cols
+</code>
+</gretl-function>
+<gretl-function name="setDefault" type="bundle" private="1">
+ <params count="1">
+  <param name="X" type="list" const="true"/>
+ </params>
+<code>/**
+* Creates a bundle object with default values.
+*
+* @param list X - The list of values.
+* @return bundle - The bundle object with default values.
+*/
+
+bundle self
+
+scalar self.use_vcv = TRUE
+scalar self.N = $nobs
+scalar self.nX = nelem(X)
+scalar self.do_stdize = TRUE
+matrix self.eigenvectors = {}
+strings self.filenames = array(0)
+scalar self.verbose = FALSE
+
+# Tweaks for biplot
+scalar self.centre_biplot = TRUE # if TRUE, zeros are centred on both axis
+scalar self.cols_biplot = NA  # NA: set automatically
+string self.color_arrow = &quot;black&quot;
+string self.color_pattern = &quot;dark2&quot;
+scalar self.fontsize = 12
+scalar self.fontsize_arrow = 12
+string self.filename = &quot;display&quot;
+scalar self.height_biplot = 600
+scalar self.linewidth = 1.5
+scalar self.linewidth_arrow = 2.0
+scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
+scalar self.offset_label = 0.1
+scalar self.pointtype = 7
+scalar self.pointsize = 1.0
+scalar self.rows_biplot = NA  # NA: set automatically
+scalar self.transparency = 150 # min: 0, max: 255
+scalar self.width_biplot = 600
+
+return self
+</code>
+</gretl-function>
+<gretl-function name="getTypeXX" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundleref"/>
+ </params>
+<code>/**
+* This function sets the value of `self.opt_type_xx` based on the value of `self.use_vcv`.
+* If `self.use_vcv` is TRUE, the value of `self.opt_type_xx` is set to &quot;--covariance&quot;.
+* Otherwise, the default value of `self.opt_type_xx` is an empty string.
+*
+* @param self - The bundle object.
+*/
+
+string self.opt_type_xx = &quot;&quot;      # default: correlation matrix is used
+
+if self.use_vcv == TRUE
+  string self.opt_type_xx = &quot;--covariance&quot;
+endif
+</code>
+</gretl-function>
+<gretl-function name="printTypeXX" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>if self.verbose
+  if self.use_vcv == TRUE
+    Info(&quot;Compute PCA using the variance-covariance among features.&quot;)
+  else
+    Info(&quot;Compute PCA using correlation among features.&quot;)
+  endif
+endif
+</code>
+</gretl-function>
+<gretl-function name="updateT" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundleref"/>
+ </params>
+<code>scalar self.N = $nobs
+if self.verbose
+  Warn(&quot;Removed observations with missing values.&quot;)
+endif
+</code>
+</gretl-function>
+<gretl-function name="getStdizedMatrix" type="matrix" private="1">
+ <params count="2">
+  <param name="X" type="list" const="true"/>
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>/**
+* Standardize the input matrix X to have zero mean and unit standard deviation if selected, otherwise leave it unchanged.
+*
+* @param X - The input list to be standardized.
+* @param self - The bundle containing the configuration options.
+* @return The standardized matrix.
+*/
+
+if nelem(X) == 0
+  Warn(&quot;Input list is empty. Returning an empty matrix.&quot;)
+  return {}
+endif
+
+matrix Z
+
+if self.do_stdize
+  matrix Z = {stdize(X)}
+else
+  matrix Z = {X}
+endif
+
+return Z
+</code>
+</gretl-function>
+<gretl-function name="doSvdAndStoreResult" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundleref"/>
+ </params>
+<code>/* code description
+return: type, description */
+
+matrix D, U, V
+
+# Singular values are proportional to the square roots of the eigenvalues
+# of the VCV matrix
+# Matrix 'D' is a row vector -of the (positive) singular values in
+# descending order;
+# D_i equals the i-th eigenvalue * ($nobs-1)
+matrix self.D = svd(self.ZZ, &amp;U, &amp;V)
+
+matrix self.V = V'  # make sure columns refer to the m-th component
+rnameset(self.V, self.vnames)
+strings cnames = createCnamesComponents(self.nX)
+cnameset(self.V, cnames)
+
+matrix self.U = U   # these are the loadings (aka standard coordinates)
+matrix self.UD = self.U .* self.D  # principal coordinates
+</code>
+</gretl-function>
+<gretl-function name="varianceExplained" type="matrix" private="1">
+ <params count="1">
+  <param name="eigenvalues" type="matrix" const="true"/>
+ </params>
+<code>/* Compute variance explained in percent. */
+
+matrix v = eigenvalues ./ sum(eigenvalues) .* 100
+cnameset(v, createCnamesComponents(nelem(v)))
+
+return v
+</code>
+</gretl-function>
+<gretl-function name="createCnamesComponents" type="strings" private="1">
+ <params count="1">
+  <param name="nX" type="int" min="1" const="true"/>
+ </params>
+<code>/* Create an array of column names. */
+
+strings clabels = array(nX)
+loop i=1..nX
+  clabels[i] = sprintf(&quot;PC %d&quot;, $i)
+endloop
+
+return clabels
+</code>
+</gretl-function>
+<gretl-function name="computePCAScores" type="matrix" private="1">
+ <params count="2">
+  <param name="Z" type="matrix" const="true"/>
+  <param name="U" type="matrix" const="true"/>
+ </params>
+<code>/*
+* Compute the scores of the Principal Component Analysis (PCA).
+* The scores are the representation of the data in the principal component space.
+* They are computed by multiplying the (standardized) data matrix Z by the matrix U of left singular vectors from the SVD of Z.
+*
+* @param Z - The standardized data matrix.
+* @param U - The matrix of left singular vectors from the SVD of Z.
+* @return The matrix of PCA scores.
+*/
+
+matrix scores = Z * U
+
+return scores
+</code>
+</gretl-function>
+<gretl-function name="computeEigenvalues" type="matrix" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>/*
+* Compute the eigenvalues of the data matrix in the context of PCA.
+*
+* @param self - The bundle containing the diagonal matrix D of singular values and the number of observations N.
+* @return The matrix of eigenvalues.
+*/
+
+matrix lambdas = self.D / (self.N - 1)
+return lambdas
+</code>
+</gretl-function>
+<gretl-function name="printLoadings" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>printf &quot;\nComponent loadings\n\n&quot;
+printf &quot;%16.3f\n&quot;, self.V
+</code>
+</gretl-function>
+<gretl-function name="printPVE" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>/* Print variances explained. */
+
+matrix M = self.eigenvalues'
+M ~= self.D'
+M ~= self.variance_explained'
+M ~= cum(self.variance_explained')
+
+rnameset(M, createCnamesComponents(self.nX))
+strings clabels = defarray(&quot;Eigenvalue&quot;, &quot;Singular Values&quot;, &quot;Proportion&quot;, &quot;Cumulative&quot;)
+cnameset(M, clabels)
+
+printf &quot;%16.3f\n&quot;, M
+</code>
+</gretl-function>
+<gretl-function name="printTitle" type="void" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>if self.use_vcv == TRUE
+  string type = &quot;Covariance&quot;
+else
+  string type = &quot;Correlation&quot;
+endif
+printf &quot;\n\nPrincipal Component Analysis of %s Matrix\n\n&quot;, type
+</code>
+</gretl-function>
+<gretl-function name="createArrowString" type="string" private="1">
+ <params count="3">
+  <param name="self" type="bundle" const="true"/>
+  <param name="pc1" type="int" min="1" const="true"/>
+  <param name="pc2" type="int" min="1" const="true"/>
+ </params>
+<code>/*
+* Create a string that represents a set of arrows for a biplot.
+* The arrows are determined by the loadings of the variables on the principal components.
+*
+* @param self - The bundle containing the loadings matrix V and the number of variables nX.
+* @param pc1 - The index of the first principal component.
+* @param pc2 - The index of the second principal component.
+* @return The string that represents the set of arrows.
+*/
+
+string arrow = &quot;&quot;
+
+loop l=1..self.nX
+
+  #set arrow 1 from &lt;x1&gt;, second &lt;y1&gt; to &lt;x2&gt;, second &lt;y2&gt;
+
+  arrow += sprintf(&quot;set arrow to %g,%g lt 1 lw %d lc rgb '%s'\n&quot;, self.V[l,pc1], self.V[l,pc2], self.linewidth_arrow, self.color_arrow)
+endloop
+
+return arrow
+</code>
+</gretl-function>
+<gretl-function name="createLabelString" type="string" private="1">
+ <params count="3">
+  <param name="self" type="bundle" const="true"/>
+  <param name="pc1" type="int" min="1" const="true"/>
+  <param name="pc2" type="int" min="1" const="true"/>
+ </params>
+<code>/*
+* Create a string that represents a set of labels for a biplot.
+*
+* @param self - The bundle containing the loadings matrix V and the number of variables nX.
+* @param pc1 - The index of the first principal component.
+* @param pc2 - The index of the second principal component.
+* @return The string that represents the set of arrows.
+*/
+string label = &quot;&quot;
+
+loop l=1..self.nX
+  label += sprintf(&quot;set label '%s' at %g,%g tc rgb '%s' font ',%d' front\n&quot;, self.vnames[l], (self.offset_label + self.V[l,pc1]), (self.offset_label + self.V[l,pc2]), self.color_arrow, self.fontsize_arrow)
+endloop
+
+return label
+</code>
+</gretl-function>
+<gretl-function name="calculateValueRange" type="scalar" private="1">
+ <params count="1">
+  <param name="scores" type="matrix" const="true"/>
+ </params>
+<code>/*
+* Calculate the range of values in the scores matrix.
+* It finds the absolute minimum and maximum values in the scores, takes the maximum of these two values, and then multiplies it by 1.025 to provide a little extra space.
+*
+* @param scores - Matrix of scores for all
+* @return The calculated value range.
+*/
+
+scalar value = xmax(abs(min(scores)), max(scores)) * 1.025
+
+return value
+</code>
+</gretl-function>
+<gretl-function name="createPointCommands" type="string" private="1">
+ <params count="1">
+  <param name="self" type="bundle" const="true"/>
+ </params>
+<code>/*
+This is a Gretl function that creates a string of plotting commands for
+the biplot.
+
+Arguments:
+self (bundle): A bundle object that contains the following elements:
+- color_pattern (string): Defines the color pattern to use for the points.
+- nX (int): The number of points to plot.
+- transparency (int): The transparency level for the points, represented
+as a hexadecimal integer.
+- pointtype (int): The type of points to plot.
+- pointsize (float): The size of the points.
+
+Returns:
+cmd (string): A string of point plotting commands */
+
+string cmd
+strings colors = get_color_definitions(self.color_pattern)
+
+loop i=1..self.nX
+  cmd += sprintf(&quot;set linetype $i lc rgb \&quot;#%x%s\&quot; pt %d ps %g\n&quot;, self.transparency, colors[i], self.pointtype, self.pointsize)
+endloop
+
+return cmd
+</code>
+</gretl-function>
+<gretl-function name="get_color_definitions" type="strings" private="1">
+ <params count="1">
+  <param name="which" type="string"/>
+ </params>
+<code>/* Used for biplot. Put your own definitions here. */
+
+if which != &quot;default&quot; || which != &quot;dark2&quot;
+  which = &quot;dark2&quot;
+endif
+
+if which == &quot;default&quot;
+  return defarray( &quot;C41E3A&quot;, &quot;4682B4&quot;, &quot;FFBF00&quot;, &quot;ff0000&quot;, &quot;00cc00&quot;, &quot;8faab3&quot;, &quot;0000ff&quot;, &quot;bf25b2&quot;, &quot;ffa500&quot; )
+elif which == &quot;dark2&quot;
+  return defarray( &quot;1B9E77&quot;, &quot;D95F02&quot;, &quot;7570B3&quot;, &quot;E7298A&quot;, &quot;66A61E&quot;, &quot;E6AB02&quot;, &quot;A6761D&quot;, &quot;666666&quot;, &quot;C41E3A&quot;, &quot;4682B4&quot;, &quot;FFBF00&quot;, &quot;ff0000&quot;, &quot;00cc00&quot;, &quot;8faab3&quot;, &quot;0000ff&quot;, &quot;bf25b2&quot;, &quot;ffa500&quot; )
+endif
+</code>
+</gretl-function>
+<gretl-function name="createRangeString" type="string" private="1">
+ <params count="2">
+  <param name="axis" type="string" const="true"/>
+  <param name="value" type="scalar" const="true"/>
+ </params>
+<code>/* This function takes two parameters: a string axis and a scalar value. It returns a formatted string that sets the range of the specified axis. */
+
+if ok(value)
+  return sprintf(&quot;set %srange[%g:%g]&quot;, axis, -value, value)
+else
+  return &quot;&quot;
+endif
+</code>
+</gretl-function>
+<gretl-function name="getColsBiplot" type="string" private="1">
+ <params count="1">
+  <param name="cols" type="int" const="true"/>
+ </params>
+<code>/* String for 'gridplot' command setting the number of cols for the plot. */
+string S
+if ok(cols)
+  string S = sprintf(&quot;--cols=%d&quot;, cols)
+endif
+
+return S
+</code>
+</gretl-function>
+<gretl-function name="getRowsBiplot" type="string" private="1">
+ <params count="1">
+  <param name="rows" type="int" const="true"/>
+ </params>
+<code>/* String for 'gridplot' command setting the number of rows for the plot. */
+string S
+if ok(rows)
+  string S = sprintf(&quot;--rows=%d&quot;, rows)
+endif
+
+return S
+</code>
+</gretl-function>
+<gretl-function name="createColumnNamesMplot" type="strings" private="1">
+ <params count="1">
+  <param name="add_factor" type="bool" const="true"/>
+ </params>
+<code>strings S = defarray(&quot;:&quot;, &quot;:&quot;)
+if add_factor == TRUE
+  S += &quot;F&quot;
+endif
+return S
+</code>
+</gretl-function>
+<gretl-function name="getFactorPlotOption" type="string" private="1">
+ <params count="1">
+  <param name="add_factor" type="bool" const="true"/>
+ </params>
+<code>/* Create gnuplot option string dependend if add_factor is TRUE. */
+
+string s = &quot;&quot;
+
+if add_factor
+  s = &quot;dummy&quot;
+endif
+
+return s
+</code>
+</gretl-function>
+<gretl-function name="addFactorColumn" type="void" private="1">
+ <params count="3">
+  <param name="add_factor" type="bool" const="true"/>
+  <param name="factor" type="series" const="true"/>
+  <param name="mat" type="matrixref"/>
+ </params>
+<code>/* This function addFactorColumn takes three parameters: a boolean add_factor, a series factor, and a pointer to a matrix mat. If add_factor is true, the function appends the factor series to the matrix mat. */
+
+if add_factor
+  mat ~= {factor}
+endif
+</code>
+</gretl-function>
+<sample-script>
+clear
+set verbose off
+
+include pcaTools.gfn
+
+# SELECT an example to run
+EXAMPLE = 2
+
+if EXAMPLE == 1
+    open mrw.gdt --quiet --preserve
+    list X = gdp60 gdp85 inv
+elif EXAMPLE == 2
+    open griliches.gdt --quiet --preserve
+    list X = med age lw expr
+endif
+
+smpl X --no-missing
+
+bundle P = pcaEst(X)
+#print P
+#pcaPrint(P)
+#pcaScreeplot(P)
+
+# Biplot
+if EXAMPLE == 2
+    series P.factor = mrt  # factorized biplot
+endif
+
+# All parameters are optional -- activate if wished
+scalar P.n_pcs_to_plot = 2
+#scalar P.pointtype = 7
+#scalar P.transparency = 200
+#scalar P.linewidth_arrow = 3
+#scalar P.fontsize_arrow = 12
+#scalar P.offset_label = 0.25
+#string P.color_arrow = &quot;blue&quot;
+
+pcaBiplot(P)
+</sample-script>
+</gretl-function-package>
+</gretl-functions>
