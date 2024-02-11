@@ -24,6 +24,7 @@ function bundle setDefault (const list X)
     string self.color_pattern = "dark2"
     scalar self.fontsize = 12
     scalar self.fontsize_arrow = 12
+    scalar self.fontsize_key = 8
     string self.filename = "display"
     scalar self.height_biplot = 600
     scalar self.linewidth = 1.5
@@ -422,7 +423,7 @@ function void pcaBiplot (const bundle self, const string filename[null])
     scalar add_factor = FALSE
     scalar xrange = NA
     scalar yrange = NA
-    string opt_key = "set key"
+    string opt_key = sprintf("set key font ',%d'", self.fontsize_key)
     string opt_rows, opt_cols
 
     if self.sparse_pca
@@ -533,7 +534,9 @@ function string createPointCommands (const bundle self)
     strings colors = get_color_definitions(self.color_pattern)
 
     loop i=1..self.nX
-        cmd += sprintf("set linetype $i lc rgb \"#%x%s\" pt %d ps %g\n", self.transparency, colors[i], self.pointtype, self.pointsize)
+        cmd += sprintf("set linetype $i lc rgb \"#%x%s\" pt %d ps %g\n",
+                       self.transparency, colors[i], self.pointtype,
+                       self.pointsize)
     endloop
 
     return cmd

@@ -110,8 +110,9 @@ One can tweak the plot by passing specific parameters to the bundle `self` befor
 - `color_arrow`: string, Color of the arrows depicting the eigenvector (default: "web-blue")
 - `color_pattern`: string, Color pattern for (factorized) data points of biplot. Either "dark2" or "default" (default: `dark2`).
 - `factor`: series, Distinct values for factorized bi-plot (default: none)
-- `fontsize`: int, Size of font (default: 12)
+- `fontsize`: int, Size of font for the title and variable names (default: 12)
 - `fontsize_arrow`: int, Size of font of the arrow labels (default: 12)
+- `fontsize_key`: int, Size of font of the key/ legend (default: 8)
 - `height_biplot`: int, Height of biplot (default: 600)
 - `linedwidth`: scalar, Width of the line (default: 1.5)
 - `linedwidth_arrow`: scalar, Width of the lines for the bi-plot arrows (default: 1.0)
@@ -131,6 +132,7 @@ One can tweak the plot by passing specific parameters to the bundle `self` befor
     * Introduce sparse regression-based PCA using the forward-stagewise boosting algorithm for feature selection
     * Improve plotting the loadings: put on the secondary axis
     * New package dependence: 'fsboost' package
+    * Make font size of the key adjustable
 
 * **v0.1 (January 2024)**
     * Initial version
