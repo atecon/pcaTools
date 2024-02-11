@@ -29,10 +29,12 @@ function bundle setDefault (const list X)
     scalar self.linewidth = 1.5
     scalar self.linewidth_arrow = 1.0
     scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
-    scalar self.offset_label = 0.1
+    scalar self.offset_label_x = 0
+    scalar self.offset_label_y = 0
     scalar self.pointtype = 7
     scalar self.pointsize = 1.0
     scalar self.rows_biplot = NA  # NA: set automatically
+    scalar self.show_loadings = TRUE  # placeholder switch: plot loading vectors or not.
     scalar self.transparency = 150 # min: 0, max: 255
     scalar self.width_biplot = 600
 
@@ -383,8 +385,8 @@ function string createLabelString (const bundle self,
 
             label += sprintf("set label '%s' at %g,%g tc rgb '%s' font ',%d' front\n",
                              self.vnames[l],
-                             (self.offset_label + v1 * xrange),
-                             (self.offset_label + v2 * xrange),
+                             (self.offset_label_x + v1 * xrange),
+                             (self.offset_label_y + v2 * yrange),
                              self.color_arrow,
                              self.fontsize_arrow)
         endif
@@ -492,10 +494,10 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     literal @label
                     literal set y2range [-1:1]
                     literal set x2range [-1:1]
-                    printf "set y2tics 0.2 nomirror tc rgb '%s'",
-                        self.color_arrow
-                    printf "set x2tics 0.2 nomirror tc rgb '%s'",
-                        self.color_arrow
+                    printf "set y2tics 0.2 nomirror tc rgb '%s' font ',%d'",
+                        self.color_arrow, self.fontsize
+                    printf "set x2tics 0.2 nomirror tc rgb '%s' font ',%d'",
+                        self.color_arrow, self.fontsize
                 end plot --outbuf=BiPlots[count]
                 count++
             endif

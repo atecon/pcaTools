@@ -17,8 +17,8 @@ endif
 smpl X --no-missing
 
 
-bundle P = pcaEst(X)   # non-sparse PCA
-#bundle P = pcaEst(X, _(sparse_pca = TRUE))  # sparse-PCA
+#bundle P = pcaEst(X)   # non-sparse PCA
+bundle P = pcaEst(X, _(sparse_pca = TRUE))  # sparse-PCA
 
 print P
 pcaPrint(P)
