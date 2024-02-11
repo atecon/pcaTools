@@ -534,9 +534,7 @@ function string createPointCommands (const bundle self)
     strings colors = get_color_definitions(self.color_pattern)
 
     loop i=1..self.nX
-        cmd += sprintf("set linetype $i lc rgb \"#%x%s\" pt %d ps %g\n",
-                       self.transparency, colors[i], self.pointtype,
-                       self.pointsize)
+        cmd += sprintf("set linetype $i lc rgb \"#%x%s\" pt %d ps %g\n", self.transparency, colors[i], self.pointtype, self.pointsize)
     endloop
 
     return cmd
