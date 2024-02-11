@@ -16,9 +16,12 @@ endif
 
 smpl X --no-missing
 
-bundle P = pcaEst(X)
-#print P
-#pcaPrint(P)
+
+bundle P = pcaEst(X)   # non-sparse PCA
+#bundle P = pcaEst(X, _(sparse_pca = TRUE))  # sparse-PCA
+
+print P
+pcaPrint(P)
 #pcaScreeplot(P)
 
 # Biplot
@@ -29,10 +32,11 @@ endif
 # All parameters are optional -- activate if wished
 scalar P.n_pcs_to_plot = 2
 #scalar P.pointtype = 7
-#scalar P.transparency = 200
+scalar P.transparency = 200
 #scalar P.linewidth_arrow = 3
 #scalar P.fontsize_arrow = 12
-#scalar P.offset_label = 0.25
+scalar P.offset_label = 0.25
 #string P.color_arrow = "blue"
+
 
 pcaBiplot(P)

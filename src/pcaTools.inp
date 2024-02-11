@@ -15,18 +15,19 @@ function bundle setDefault (const list X)
     matrix self.eigenvectors = {}
     strings self.filenames = array(0)
     scalar self.verbose = FALSE
+    scalar self.sparse_pca = FALSE
 
     # Tweaks for biplot
     scalar self.centre_biplot = TRUE # if TRUE, zeros are centred on both axis
     scalar self.cols_biplot = NA  # NA: set automatically
-    string self.color_arrow = "black"
+    string self.color_arrow = "web-blue"
     string self.color_pattern = "dark2"
     scalar self.fontsize = 12
     scalar self.fontsize_arrow = 12
     string self.filename = "display"
     scalar self.height_biplot = 600
     scalar self.linewidth = 1.5
-    scalar self.linewidth_arrow = 2.0
+    scalar self.linewidth_arrow = 1.0
     scalar self.n_pcs_to_plot = NA  # NA: show all combinations of PCs
     scalar self.offset_label = 0.1
     scalar self.pointtype = 7
@@ -102,8 +103,7 @@ end function
 
 
 function void doSvdAndStoreResult (bundle *self)
-    /* code description
-    return: type, description */
+    /* Compute SVD and store results */
 
     matrix D, U, V
 
@@ -114,13 +114,46 @@ function void doSvdAndStoreResult (bundle *self)
     # D_i equals the i-th eigenvalue * ($nobs-1)
     matrix self.D = svd(self.ZZ, &U, &V)
 
-    matrix self.V = V'  # make sure columns refer to the m-th component
+    # tranpose to make sure columns refer to the m-th component
+    matrix self.V = V'
     rnameset(self.V, self.vnames)
     strings cnames = createCnamesComponents(self.nX)
     cnameset(self.V, cnames)
 
     matrix self.U = U   # these are the loadings (aka standard coordinates)
     matrix self.UD = self.U .* self.D  # principal coordinates
+end function
+
+
+function void doSparsePcRegression (bundle *self)
+    /* Compute sparse regression-based principal components using the
+       forward-stagewise boosting algorithm.. */
+
+    list Xstd = mat2list(self.Z)
+    list Scores = mat2list(self.scores)
+    matrix self.Vsparse = mshape(NA, nelem(Xstd), nelem(Scores))
+    list ScoresSparse = empty
+
+    loop foreach i Scores
+        bundle Model = fsreg($i, Xstd)
+
+        if self.verbose
+            print_fsboost_results(Model)
+        endif
+
+        # Normalize to make sure the sum of squares of the loadings sum to unit
+        self.Vsparse[,i] = Model.coeff / sqrt(sum(Model.coeff.^2))
+
+        # Compute and store scores
+        ScoresSparse += genseries(sprintf("sparse_pc%d", i),
+                                  fsboost_predict(Xstd, Model))
+    endloop
+
+    matrix self.scores_sparse = {ScoresSparse}
+
+    rnameset(self.Vsparse, self.vnames)
+    strings cnames = createCnamesComponents(self.nX)
+    cnameset(self.Vsparse, cnames)
 end function
 
 
@@ -188,8 +221,9 @@ function bundle pcaEst (const list X "Features",
 
     bundle self = setDefault(X)
     if exists(opts)
-        bundle self = self + opts
+        bundle self = opts + self
     endif
+
     strings self.vnames = varnames(X)
     getTypeXX(&self)
     printTypeXX(self)
@@ -199,9 +233,14 @@ function bundle pcaEst (const list X "Features",
     matrix self.Z = getStdizedMatrix(X, self)
     matrix self.ZZ = self.Z'self.Z
     doSvdAndStoreResult(&self)
+
     matrix self.eigenvalues = computeEigenvalues(self)
     matrix self.variance_explained = varianceExplained(self.eigenvalues)
     matrix self.scores = computePCAScores(self.Z, self.U)
+
+    if self.sparse_pca == TRUE
+        doSparsePcRegression(&self)
+    endif
 
     /*
     # Only for debugging
@@ -232,12 +271,21 @@ function void pcaPrint (const bundle self)
     printTitle(self)
     printPVE(self)
     printLoadings(self)
+    printSparseLoadings(self)
 end function
 
 
 function void printLoadings (const bundle self)
     printf "\nComponent loadings\n\n"
     printf "%16.3f\n", self.V
+end function
+
+
+function void printSparseLoadings (const bundle self)
+    if self.sparse_pca
+        printf "\nSparse component loadings\n\n"
+        printf "%16.3f\n", self.Vsparse
+    endif
 end function
 
 
@@ -269,7 +317,9 @@ end function
 
 function string createArrowString (const bundle self,
                                    const int pc1[1::],
-                                   const int pc2[1::])
+                                   const int pc2[1::],
+                                   const scalar xrange,
+                                   const scalar yrange)
     /*
     * Create a string that represents a set of arrows for a biplot.
     * The arrows are determined by the loadings of the variables on the principal components.
@@ -283,13 +333,19 @@ function string createArrowString (const bundle self,
     string arrow = ""
 
     loop l=1..self.nX
-
         #set arrow 1 from <x1>, second <y1> to <x2>, second <y2>
 
+        if self.sparse_pca
+            v1 = self.Vsparse[l,pc1]
+            v2 = self.Vsparse[l,pc2]
+        else
+            v1 = self.V[l,pc1]
+            v2 = self.V[l,pc2]
+        endif
 
-        arrow += sprintf("set arrow to %g,%g lt 1 lw %d lc rgb '%s'\n",
-                         self.V[l,pc1],
-                         self.V[l,pc2],
+        arrow += sprintf("set arrow from 0,0 to %g,%g lt 1 lw %d lc rgb '%s'\n",
+                         v1 * xrange,
+                         v2 * yrange,
                          self.linewidth_arrow,
                          self.color_arrow)
     endloop
@@ -300,7 +356,9 @@ end function
 
 function string createLabelString (const bundle self,
                                    const int pc1[1::],
-                                   const int pc2[1::])
+                                   const int pc2[1::],
+                                   const scalar xrange,
+                                   const scalar yrange)
     /*
     * Create a string that represents a set of labels for a biplot.
     *
@@ -312,12 +370,24 @@ function string createLabelString (const bundle self,
     string label = ""
 
     loop l=1..self.nX
-        label += sprintf("set label '%s' at %g,%g tc rgb '%s' font ',%d' front\n",
-                         self.vnames[l],
-                         (self.offset_label + self.V[l,pc1]),
-                         (self.offset_label + self.V[l,pc2]),
-                         self.color_arrow,
-                         self.fontsize_arrow)
+
+        if self.sparse_pca
+            v1 = self.Vsparse[l,pc1]
+            v2 = self.Vsparse[l,pc2]
+        else
+            v1 = self.V[l,pc1]
+            v2 = self.V[l,pc2]
+        endif
+
+        if v1 != 0 || v2 != 0  # only show label if loadings are nonzero
+
+            label += sprintf("set label '%s' at %g,%g tc rgb '%s' font ',%d' front\n",
+                             self.vnames[l],
+                             (self.offset_label + v1 * xrange),
+                             (self.offset_label + v2 * xrange),
+                             self.color_arrow,
+                             self.fontsize_arrow)
+        endif
     endloop
 
     return label
@@ -353,6 +423,12 @@ function void pcaBiplot (const bundle self, const string filename[null])
     string opt_key = "set key"
     string opt_rows, opt_cols
 
+    if self.sparse_pca
+        matrix scores = self.scores_sparse
+    else
+        matrix scores = self.scores
+    endif
+
     if inbundle(self, "factor")
         if typename(self.factor) == "series"
             add_factor = TRUE
@@ -370,9 +446,18 @@ function void pcaBiplot (const bundle self, const string filename[null])
     loop i=1..n_pcs_to_plot       # x-axis
         loop j=1..n_pcs_to_plot   # y-axis
             if i != j && i < j
-                string arrows = createArrowString(self, i, j)
-                string label = createLabelString(self, i, j)
-                matrix mplot = self.scores[,{j,i}]
+
+                scalar xrange = calculateValueRange(scores[,i])
+                scalar yrange = calculateValueRange(scores[,j])
+                string arrows = createArrowString(self, i, j, xrange, yrange)
+
+                string label = createLabelString(self, i, j, xrange, yrange)
+                if self.sparse_pca
+                    matrix mplot = scores[,{j,i}]
+                else
+                    matrix mplot = scores[,{j,i}]
+                endif
+
                 if add_factor
                     addFactorColumn(add_factor, factor, &mplot)
                 endif
@@ -380,8 +465,6 @@ function void pcaBiplot (const bundle self, const string filename[null])
                 cnameset(mplot, cnames)
 
                 if self.centre_biplot
-                    scalar xrange = calculateValueRange(self.scores[,i])
-                    scalar yrange = calculateValueRange(self.scores[,j])
                     string opt_xrange = createRangeString("x", xrange)
                     string opt_yrange = createRangeString("y", yrange)
                 endif
@@ -407,6 +490,12 @@ function void pcaBiplot (const bundle self, const string filename[null])
                     printf "set ytics font ',%d'", self.fontsize
                     literal @arrows
                     literal @label
+                    literal set y2range [-1:1]
+                    literal set x2range [-1:1]
+                    printf "set y2tics 0.2 nomirror tc rgb '%s'",
+                        self.color_arrow
+                    printf "set x2tics 0.2 nomirror tc rgb '%s'",
+                        self.color_arrow
                 end plot --outbuf=BiPlots[count]
                 count++
             endif
