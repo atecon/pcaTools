@@ -4,6 +4,8 @@ This package augments Gretl's built-in `pca` command.
 
 The package is a collection of functions for conducting Principal Component Analysis. It ships two plotting functions for creating a so called 'scree plot' (https://en.wikipedia.org/wiki/Scree_plot) and a bi-plot (https://en.wikipedia.org/wiki/Biplot).
 
+Furthermore, it supports the computation of sparse PCs meaning that some loading coefficients may be zero. The estimation of the loadings is done by the forward-stagewise boosting algorithm (Tibshirani, for details see the `fsboost` Gretl package) which is similar to Lasso. Currently, however, only the loadings and scores are based on the sparse PC estimates but not the estimated variances.
+
 Please report bugs or comments on the gretl mailing list, report an issue on github (https://github.com/atecon/pcaTools/issues) or write to atecon@posteo.de.
 
 
@@ -105,23 +107,29 @@ One can tweak the plot by passing specific parameters to the bundle `self` befor
 
 - `centre_biplot`: bool, Centre the axes if `TRUE`, otherwise not (default: `TRUE`).
 - `cols_biplot`: int, Number of columns of gridplot (default: `NA` -> automatically set)
-- `color_arrow`: string, Color of the arrows depicting the eigenvector (default: "black")
+- `color_arrow`: string, Color of the arrows depicting the eigenvector (default: "web-blue")
 - `color_pattern`: string, Color pattern for (factorized) data points of biplot. Either "dark2" or "default" (default: `dark2`).
 - `factor`: series, Distinct values for factorized bi-plot (default: none)
 - `fontsize`: int, Size of font (default: 12)
 - `fontsize_arrow`: int, Size of font of the arrow labels (default: 12)
 - `height_biplot`: int, Height of biplot (default: 600)
 - `linedwidth`: scalar, Width of the line (default: 1.5)
-- `linedwidth_arrow`: scalar, Width of the lines for the bi-plot arrows (default: 2.0)
+- `linedwidth_arrow`: scalar, Width of the lines for the bi-plot arrows (default: 1.0)
 - `n_pcs_to_plot`: int, Number of first principal components to plot (default: all)
 - `offset_label`: scalar, Offset of labels for arrows (default: 0.1)
 - `pointtype`: int, Point type (default: 4)
 - `pointsize`: scalar, Size of point (default: 1.0)
 - `rows_biplot`: int, Number of rows of gridplot (default: `NA` -> automatically set)
-- `width_biplot`: int, Width of biplot (default: 600)
+- `sparse_pca`: bool, If true, compute sparse PCA, otherwise non-sparse version (default: `FALSE`)
 - `transparency`: int, The rgbalpha plotting style assumes that each pixel of input data contains an alpha value in the range [0:255] (no transparency:full transparency). Currently, only applied to the 1st factor.
+- `width_biplot`: int, Width of biplot (default: 600)
 
 # Changelog
+
+* **v0.2 (February 2024)**
+    * Introduce sparse regression-based PCA using the forward-stagewise boosting algorithm for feature selection
+    * Improve plotting the loadings: put on the secondary axis
+    * New package dependence: 'fsboost' package
 
 * **v0.1 (January 2024)**
     * Initial version
