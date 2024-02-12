@@ -15,7 +15,7 @@ function string confidence_ellipse_plot (matrix V, matrix b, scalar alpha,
     W = {}
 
     matrix e = eigensym(V, &W)
-    matrix coeff = W .* sqrt(chicrit.*e)'
+    matrix coeff = W .* sqrt(chicrit .* e)'
     string title = sprintf("%g%% confidence ellipse and %g%% marginal intervals", cval, cval)
     string fname
 
@@ -35,18 +35,29 @@ function string confidence_ellipse_plot (matrix V, matrix b, scalar alpha,
         set force_decpoint on
 
         printf "%g,%g point lt 2 pt 1 offset 3,3\n", b[1], b[2]
-
         printf "x(t) = %g*cos(t)%+g*sin(t)%+g\n", coeff[1,2], coeff[1,1], b[1]
         printf "y(t) = %g*cos(t)%+g*sin(t)%+g\n", coeff[2,2], coeff[2,1], b[2]
-
+        # Draw the elipses
         printf "plot x(t), y(t) notitle, \\\n"
+
+        printf "%g,%g point lt 2 pt 1 offset 3,3\n", 1+b[1], 1+b[2]
+        printf "a(t) = %g*cos(t)%+g*sin(t)%+g\n", 1+coeff[1,2], coeff[1,1], 1+b[1]
+        printf "b(t) = %g*cos(t)%+g*sin(t)%+g\n", 1+coeff[2,2], coeff[2,1], 1+b[2]
+        # Draw the elipses
+        printf "plot a(t), b(t) notitle, \\\n"
+
+        # lhs horizontal line
         printf "%g, y(t) notitle w lines lt 2, \\\n", b[1] - maxerr[1]
+        # rhs horizontal line
         printf "%g, y(t) notitle w lines lt 2, \\\n", b[1] + maxerr[1]
+        # lower vertical line
         printf "x(t), %g notitle w lines lt 2, \\\n", b[2] - maxerr[2]
+        # upper vertical line
         printf "x(t), %g notitle w lines lt 2\n", b[2] + maxerr[2]
     end outfile
 
     gnuplot --input="@fname" --output=display
+
     return fname
 end function
 
@@ -54,5 +65,5 @@ end function
 
 open griliches.gdt --quiet
 ols lw const iq kww expr tenure -w
-sel = {2,3}
-confidence_ellipse_plot($vcv[sel,sel], $coeff[sel], 0.95, "IQ", "KWW") 
+sel = {2,4}
+confidence_ellipse_plot($vcv[sel,sel], $coeff[sel], 0.9, "IQ", "KWW")
